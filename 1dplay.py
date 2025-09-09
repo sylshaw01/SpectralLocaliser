@@ -1,7 +1,18 @@
+
+# Makes sure nested parallelism is avoided across any underlying implementation
+import os
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+
 import scipy.sparse as sp
 from scipy.sparse.linalg import eigsh
 import numpy as np
 import matplotlib.pyplot as plt
+import multiprocessing
+#multiprocessing.set_start_method('spawn', force=True)
 from multiprocessing import Pool
 
 def create_localiser(L,rho,kappa,disorder):
@@ -31,6 +42,7 @@ def find_eigenvalues(localiser, num_eigenvalues=800):
     # Function to find the positive eigenvalues of the localiser matrix
     # numpy eigsh is best for the sparse case.
     eigvals, eigvecs = eigsh(localiser, k=num_eigenvalues,sigma = 0, which='LM')
+    #eigvals, eigvecs = eigsh(localiser, k=num_eigenvalues, which='SM')
     positive_eigvals = eigvals[eigvals > 0]
     return positive_eigvals
 
@@ -65,10 +77,12 @@ def single_iteration(args):
     L, rho, kappa, disorder, i = args
     localiser = create_localiser(L,rho,kappa,disorder)
     positive_eigvals = find_eigenvalues(localiser, L//5)
-    r = calculate_r(positive_eigvals)
+    #r = calculate_r(positive_eigvals)
     z = calculate_z(positive_eigvals)
-    print(f"   r value for {i+1}th iteration: {r}")
-    print(f"   z value for {i+1}th iteration: {z}")
+    if (i+1) % 10 == 0:
+        print(f"  Iteration {i+1}/300")
+    #print(f"   r value for {i+1}th iteration: {r}")
+    #print(f"   z value for {i+1}th iteration: {z}")
     return z
 
 L_values = [500,1000]
@@ -83,15 +97,20 @@ print("Calculating r values for different disorder strengths and system sizes")
 print("First L/5 eigenvalues are used to calculate r")
 results = [[] for _ in L_values]
 if __name__ == '__main__':
-    with Pool() as pool:
-        for L in L_values:
+
+    with Pool(4) as pool:
+        for j, L in enumerate(L_values):
             print(f"System size L: {L}")
             for disorder in disorder_values:
-
+                #r_values_for_disorder = []
                 args_list = [(L,rho,kappa,disorder,i) for i in range(num_iter)]
+                #for i in range(num_iter):
+                #    r = single_iteration(args_list[i])
+                #    r_values_for_disorder.append(r)
 
-                r_values_for_disorder = pool.map(single_iteration,args_list)
-                results[L_values.index(L)].append((disorder,np.mean(r_values_for_disorder),np.std(r_values_for_disorder)))
+                #results[j].append((disorder,np.mean(r_values_for_disorder),np.std(r_values_for_disorder)))
+                r_values_for_disorder = pool.map(single_iteration,args_list, )
+                results[j].append((disorder,np.mean(r_values_for_disorder),np.std(r_values_for_disorder)))
                 print(f"Disorder: {disorder}, r: {np.mean(r_values_for_disorder)}")
 
 
@@ -108,7 +127,7 @@ if __name__ == '__main__':
     for i,L in enumerate(L_values):
         disorders = [disorder for disorder, mean, stdev in results[i]]
         r_values = [mean for disorder, mean, stdev in results[i]]
-        stderr_values = [stdev for disorder, mean, stdev in results[i]]
+        stderr_values = [stdev/np.sqrt(num_iter) for disorder, mean, stdev in results[i]]
         plt.errorbar(disorders,r_values,yerr=stderr_values,label=f"L={L}",marker='o',capthick=2)
 
     plt.xlabel("Disorder Strength")
