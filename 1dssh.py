@@ -55,13 +55,12 @@ def create_localiser(L,rho,kappa,disorder, X):
 
     return localiser
 
+
 def find_eigenvalues(localiser, num_eigenvalues=800):
     # Function to find the positive eigenvalues of the localiser matrix
     # numpy eigsh is best for the sparse case.
-    eigvals, eigvecs = eigsh(localiser, k=num_eigenvalues,sigma = 0, which='LM')
-    positive_eigvals = eigvals[eigvals > 0]
-    #positive_eigvals = eigvals
-    return positive_eigvals
+    eigvals, eigvecs = eigsh(localiser, k=num_eigenvalues, sigma=0, which='LM')
+    return eigvals, eigvecs
 
 
 
@@ -69,37 +68,56 @@ def find_eigenvalues(localiser, num_eigenvalues=800):
 def calculate_r(eigvals):
     # Once eigenvalues are found, calculate the r value
     eigvals_s = np.diff(eigvals)
-    min_eigvals_s = np.array([min(eigvals_s[i],eigvals_s[i+1]) for i in range(len(eigvals_s)-1)])
-    max_eigvals_s = np.array([max(eigvals_s[i],eigvals_s[i+1]) for i in range(len(eigvals_s)-1)])
-    r = min_eigvals_s / max_eigvals_s
+    #min_eigvals_s = np.array([min(eigvals_s[i],eigvals_s[i+1]) for i in range(len(eigvals_s)-1)])
+    #max_eigvals_s = np.array([max(eigvals_s[i],eigvals_s[i+1]) for i in range(len(eigvals_s)-1)])
+    #r = min_eigvals_s / max_eigvals_s
+
+    min_vals = np.minimum(eigvals_s[:-1],eigvals_s[1:])
+    max_vals = np.maximum(eigvals_s[:-1],eigvals_s[1:])
+    r = np.divide(min_vals,max_vals,out=np.zeros_like(min_vals, dtype=float),where=max_vals!=0)
     return r.mean()
 
 
 def calculate_z(eigvals):    
-    eigvals = sorted(eigvals)
-    z = np.zeros(len(eigvals)-4)
-    for i in range(2,len(eigvals)-2):
-        if abs(eigvals[i+1] - eigvals[i]) < abs(eigvals[i]-eigvals[i-1]):
-            nn = abs(eigvals[i+1] - eigvals[i])
-            nnn = min(min(abs(eigvals[i]-eigvals[i-1]),abs(eigvals[i+2]-eigvals[i])),abs(eigvals[i-2]-eigvals[i]))
-        else:
-            nn = abs(eigvals[i]-eigvals[i-1])
-            nnn = min(min(abs(eigvals[i+1]-eigvals[i]),abs(eigvals[i-2]-eigvals[i])),abs(eigvals[i+2]-eigvals[i]))
-        z[i-2] = nn/nnn
+    #eigvals = sorted(eigvals)
+    #z = np.zeros(len(eigvals)-4)
+    #for i in range(2,len(eigvals)-2):
+    #    if abs(eigvals[i+1] - eigvals[i]) < abs(eigvals[i]-eigvals[i-1]):
+    #        nn = abs(eigvals[i+1] - eigvals[i])
+    #        nnn = min(min(abs(eigvals[i]-eigvals[i-1]),abs(eigvals[i+2]-eigvals[i])),abs(eigvals[i-2]-eigvals[i]))
+    #    else:
+    #        nn = abs(eigvals[i]-eigvals[i-1])
+    #        nnn = min(min(abs(eigvals[i+1]-eigvals[i]),abs(eigvals[i-2]-eigvals[i])),abs(eigvals[i+2]-eigvals[i]))
+    #    z[i-2] = nn/nnn    eigvals = np.sort(eigvals)
+    s = np.diff(eigvals)
+    s_i_minus_2 = s[:-4]
+    s_i_minus_1 = s[1:-3]
+    s_i         = s[2:-2]
+    s_i_plus_1  = s[3:-1]
+
+    nn      = np.minimum(s_i, s_i_minus_1)
+    n_other = np.maximum(s_i, s_i_minus_1)
+    nnn_left  = s_i_minus_1 + s_i_minus_2
+    nnn_right = s_i + s_i_plus_1
+    
+    nnn = np.minimum.reduce([n_other, nnn_left, nnn_right])
+
+    z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0)
     return z.mean()
 
 
 def single_iteration(args):
     X, L, rho, kappa, disorder, i = args
     localiser = create_localiser(L,rho,kappa,disorder, X)
-    positive_eigvals = find_eigenvalues(localiser, L//5)
-    #r = calculate_r(positive_eigvals)
+    eigvals, eigvecs = find_eigenvalues(localiser, L//5)
+    positive_eigvals = eigvals[eigvals > 0]
+    r = calculate_r(positive_eigvals)
     z = calculate_z(positive_eigvals)
     if i % 10 == 0:
-        print(f"Completed {i+1} iterations")
+        print(f"Completed {i} iterations")
     #print(f"   r value for {i+1}th iteration: {r}")
     #print(f"   z value for {i+1}th iteration: {z}")
-    return z
+    return r, z
 
 L = 1000
 rho = 30
