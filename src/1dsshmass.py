@@ -8,8 +8,9 @@ os.environ['NUMEXPR_NUM_THREADS'] = '1'
 import scipy.sparse as sp
 from scipy.sparse.linalg import eigsh
 import numpy as np
-import matplotlib.pyplot as plt
-from multiprocessing import Pool
+#import matplotlib.pyplot as plt
+from multiprocessing import Pool, cpu_count
+import sys
 
 
 # def create_localiser(L,rho,kappa,disorder):
@@ -39,7 +40,7 @@ m = 1
 S = 2
 
 
-def create_localiser(L,rho,kappa,disorder, X):
+def create_localiser(L,rho,kappa,disorder, X, mass_term, shift_term):
     mass_term = m * np.ones(L//2)
     shift_term = S * np.ones(L//2 - 1)
     A = sp.diags([mass_term,shift_term],[0,1],shape=(L//2,L//2),format='csr')
@@ -107,8 +108,8 @@ def calculate_z(eigvals):
 
 
 def single_iteration(args):
-    X, L, rho, kappa, disorder, i = args
-    localiser = create_localiser(L,rho,kappa,disorder, X)
+    X, L, rho, kappa, mass, i = args
+    localiser = create_localiser(L,rho,kappa,0, X, mass, 1)
     eigvals, eigvecs = find_eigenvalues(localiser, L//5)
     positive_eigvals = eigvals[eigvals > 0]
     r = calculate_r(positive_eigvals)
@@ -119,16 +120,16 @@ def single_iteration(args):
     #print(f"   z value for {i+1}th iteration: {z}")
     return r, z
 
-L = 1000
-rho = 30
-kappa = 0.1
-disorder_values = np.linspace(0,5,11)
+# L = 1000
+# rho = 30
+# kappa = 0.1
+# disorder_values = np.linspace(0,5,11)
 
-num_iter = 100
+# num_iter = 100
 
 #m_values = np.linspace(0,2,11)
-m = 1.5
-S=1
+# m = 1.5
+# S=1
 
 #localiser = create_localiser(L,rho,kappa,disorder)
 #positive_eigvals = find_eigenvalues(localiser, L//5)
@@ -140,27 +141,41 @@ S=1
 #plt.title(f"Histogram of SSH Spectral Localiser eigenvalues for L={L}, disorder={disorder}")
 #plt.xlabel("E")
 
-
-results =[[] for _ in disorder_values]
+cpu_count = int(sys.argv[1]) if len(sys.argv) > 1 else cpu_count()
+# results =[[] for _ in disorder_values]
 if __name__ == '__main__':
-    all_positions = np.linspace(-rho, rho, L)
+    
 
-    positions_A = all_positions[0::2]
-    positions_B = all_positions[1::2]
+    L_values = [500,1000,1500,2000]
+    rho = 30
+    kappa = 0.1
+    mass_values = np.linspace(0.5,5,10)
+    num_iter=1000
+    r_results = np.zeros((len(L_values),len(mass_values),num_iter))
+    z_results = np.zeros((len(L_values),len(mass_values),num_iter))
 
-    row_vector_A = sp.diags(positions_A, 0, shape=(L//2, L//2), format='csr')
-    row_vector_B = sp.diags(positions_B, 0, shape=(L//2, L//2), format='csr')
 
-    X = sp.bmat([[row_vector_A,sp.csr_matrix((L//2,L//2))],[sp.csr_matrix((L//2,L//2)),row_vector_B]],format='csr')
-
-    with Pool() as pool:
-        for j, disorder in enumerate(disorder_values):
-            print(f"Disorder: {disorder}")
-            args_list = [(X, L,rho,kappa,disorder,i) for i in range(num_iter)]
-            r_values_for_disorder = pool.map(single_iteration,args_list)
-            results[j].append((m ,np.mean(r_values_for_disorder),np.std(r_values_for_disorder)))
-            print(f"Disorder: {disorder}, r: {np.mean(r_values_for_disorder)}")
+    with Pool(cpu_count) as pool:
+        for j, L in enumerate(L_values):
             print(f"System size L: {L}")
+            all_positions = np.linspace(-rho, rho, L)
+
+            positions_A = all_positions[0::2]
+            positions_B = all_positions[1::2]
+
+            row_vector_A = sp.diags(positions_A, 0, shape=(L//2, L//2), format='csr')
+            row_vector_B = sp.diags(positions_B, 0, shape=(L//2, L//2), format='csr')
+
+            X = sp.bmat([[row_vector_A,sp.csr_matrix((L//2,L//2))],[sp.csr_matrix((L//2,L//2)),row_vector_B]],format='csr')
+            for k, mass in enumerate(mass_values):
+                print(f"    mass_term: {mass}",flush = True)
+                args_list = [(X, L,rho,kappa,mass,i) for i in range(num_iter)]
+                results = list(pool.imap(single_iteration,args_list,chunksize=1))
+                r_values, z_values = zip(*results)
+                r_results[j][k] = np.array(r_values)
+                z_results[j][k] = np.array(z_values)
+                #results[j].append((m ,np.mean(r_values_for_disorder),np.std(r_values_for_disorder)))
+                print(f"    m: {mass}, r: {np.mean(r_values)}, z: {np.mean(z_values)}",flush = True)
             #for disorder in disorder_values:
                 #r_values_for_disorder = []
             #    args_list = [(L,rho,kappa,disorder,i) for i in range(num_iter)]
@@ -173,16 +188,49 @@ if __name__ == '__main__':
             #    results[j].append((disorder,np.mean(r_values_for_disorder),np.std(r_values_for_disorder)))
             #    print(f"Disorder: {disorder}, r: {np.mean(r_values_for_disorder)}")
 
+filename = f"1dSSH_rz_results_Lmax{L_values[-1]}_iters{num_iter}.npz"
+np.savez(filename, L_values=L_values, mass_values=mass_values, r_results=r_results, z_results=z_results)
+print(f"Results saved to {filename}")
+
 #plot r as a funbction of m
 
-r_means = [results[j][0][1] for j in range(len(disorder_values))]
-r_stds = [results[j][0][2] for j in range(len(disorder_values))]
-plt.errorbar(disorder_values, r_means, yerr=r_stds, marker='o', capthick=2)
-plt.xlabel('Mass term m')
-plt.ylabel('z')
-plt.title(f'z vs mass term m for L={L}, disorder={disorder}')
-plt.grid()
-plt.savefig(f'ssh_z_L{L}_disorder{disorder}.png', dpi=300)
-plt.show()
+# figr, axr = plt.subplots()
+# for i, L in enumerate(L_values):
+#     r_means = [r_results[i][j].mean() for j in range(len(mass_values))]
+#     r_stds = [r_results[i][j].std()/np.sqrt(num_iter) for j in range(len(mass_values))]
+#     axr.errorbar(mass_values, r_means, yerr=r_stds, marker='o', capthick=2, label=f'L={L}')
+
+# axr.set_xlabel('mass term/Shift term ')
+# axr.set_ylabel('r')
+# axr.set_title('r vs m/S Strength for different system sizes L')
+# axr.legend()
+# axr.grid()
+# figr.savefig(f'ssh_r_varied_mass_maxL{L_values[-1]}.png', dpi=300)
+
+
+# figz, axz = plt.subplots()
+# for i, L in enumerate(L_values):
+#     z_means = [z_results[i][j].mean() for j in range(len(mass_values))]
+#     z_stds = [z_results[i][j].std()/np.sqrt(num_iter) for j in range(len(mass_values))]
+#     axz.errorbar(mass_values, z_means, yerr=z_stds, marker='o', capthick=2, label=f'L={L}')
+
+
+# axz.set_xlabel('mass term/Shift term')
+# axz.set_ylabel('z')
+# axz.set_title('z vs m/S Strength for different system sizes L')
+# axz.legend()
+# axz.grid()
+# figz.savefig(f'ssh_z_varied_mass_maxL{L_values[-1]}.png', dpi=300)
+# plt.show()
+
+# r_means = [results[j][0][1] for j in range(len(disorder_values))]
+# r_stds = [results[j][0][2] for j in range(len(disorder_values))]
+# plt.errorbar(disorder_values, r_means, yerr=r_stds, marker='o', capthick=2)
+# plt.xlabel('Mass term m')
+# plt.ylabel('z')
+# plt.title(f'z vs mass term m for L={L}, disorder={disorder}')
+# plt.grid()
+# plt.savefig(f'ssh_z_L{L}_disorder{disorder}.png', dpi=300)
+# plt.show()
 
 #save plot

@@ -11,11 +11,14 @@ import scipy.sparse as sp
 from scipy.linalg import eigh
 from scipy.sparse.linalg import eigsh
 import numpy as np
-import matplotlib.pyplot as plt
-import multiprocessing
+#mport matplotlib.pyplot as plt
+from multiprocessing import cpu_count
 #multiprocessing.set_start_method('spawn', force=True)
 from multiprocessing import Pool
 import time
+import sys
+
+cpu_count = int(sys.argv[1]) if len(sys.argv) > 1 else cpu_count()
 
 def create_localiser(L,rho,kappa,disorder):
     # Function to create the localiser matrix of a 1D Anderson model
@@ -119,20 +122,20 @@ if __name__ == '__main__':
 
     np.random.seed(42)
 
-    L_values = [500,1000,1500]
+    L_values = [500,1000,1500,2000,3000]
     rho = 30
     kappa = 0.1
-    disorder_values = np.linspace(0.5,5,11)
-    num_iter = 100
+    disorder_values = np.linspace(0.5,5,10)
+    num_iter = 1000
     r_results = np.zeros((len(L_values),len(disorder_values),num_iter))
     z_results = np.zeros((len(L_values),len(disorder_values),num_iter))
-    with Pool(6) as pool:
+    with Pool(cpu_count) as pool:
         for j, L in enumerate(L_values):
 
-            print(f"System size L: {L}")
+            print(f"System size L: {L}",flush = True)
             for k, disorder in enumerate(disorder_values):
 
-                start_time = time.time()
+                #start_time = time.time()
                 #r_values_for_disorder = []
                 args_list = [(L,rho,kappa,disorder,i) for i in range(num_iter)]
                 #for i in range(num_iter):
@@ -144,10 +147,14 @@ if __name__ == '__main__':
                 r_values, z_values = zip(*results)
                 r_results[j][k] = np.array(r_values)
                 z_results[j][k] = np.array(z_values)
-                print(f"    Disorder: {disorder}, r: {np.mean(r_values)}, z: {np.mean(z_values)}")
-                end_time = time.time()
-                print(f"    Time taken for disorder {disorder}: {end_time - start_time} seconds")
+                print(f"    Disorder: {disorder}, r: {np.mean(r_values)}, z: {np.mean(z_values)}",flush = True)
+                #end_time = time.time()
+                #print(f"    Time taken for disorder {disorder}: {end_time - start_time} seconds")
 
+
+filename = f"1dAnderson_rz_results_Lmax{L_values[-1]}_iters{num_iter}.npz"
+np.savez(filename, L_values=L_values, disorder_values=disorder_values, r_results=r_results, z_results=z_results)
+print(f"Results saved to {filename}")
 
 #save results to file
     # with open("1dplay_results.txt","w") as f:
@@ -161,37 +168,37 @@ if __name__ == '__main__':
 
     #plot results
 
-    figr, axr = plt.subplots(figsize=(8,6))
-    for i,L in enumerate(L_values):
-        r_vals = [r_results[i][j].mean() for j in range(len(disorder_values))]
-        r_stderr = [r_results[i][j].std()/np.sqrt(num_iter) for j in range(len(disorder_values))]
-        axr.errorbar(disorder_values,r_vals,yerr=r_stderr,label=f"L={L}",marker='o',capthick=2)
-        #disorders = [disorder for disorder, mean, stdev in results[i]]
-        #r_values = [mean for disorder, mean, stdev in results[i]]
-        #stderr_values = [stdev/np.sqrt(num_iter) for disorder, mean, stdev in results[i]]
-        #plt.errorbar(disorders,r_values,yerr=stderr_values,label=f"L={L}",marker='o',capthick=2)
+    # figr, axr = plt.subplots(figsize=(8,6))
+    # for i,L in enumerate(L_values):
+    #     r_vals = [r_results[i][j].mean() for j in range(len(disorder_values))]
+    #     r_stderr = [r_results[i][j].std()/np.sqrt(num_iter) for j in range(len(disorder_values))]
+    #     axr.errorbar(disorder_values,r_vals,yerr=r_stderr,label=f"L={L}",marker='o',capthick=2)
+    #     #disorders = [disorder for disorder, mean, stdev in results[i]]
+    #     #r_values = [mean for disorder, mean, stdev in results[i]]
+    #     #stderr_values = [stdev/np.sqrt(num_iter) for disorder, mean, stdev in results[i]]
+    #     #plt.errorbar(disorders,r_values,yerr=stderr_values,label=f"L={L}",marker='o',capthick=2)
 
-    axr.set_xlabel("Disorder Strength")
-    axr.set_ylabel("r value")
-    axr.set_title("r value vs Disorder Strength for different System Sizes")
-    axr.legend()
-    axr.grid()
-    figr.savefig(f"1dAnderson_r_vs_disorder_Lmax{L_values[-1]}.png",dpi=300)
+    # axr.set_xlabel("Disorder Strength")
+    # axr.set_ylabel("r value")
+    # axr.set_title("r value vs Disorder Strength for different System Sizes")
+    # axr.legend()
+    # axr.grid()
+    # figr.savefig(f"1dAnderson_r_vs_disorder_Lmax{L_values[-1]}.png",dpi=300)
 
-    figz, axz = plt.subplots(figsize=(8,6))
-    for i,L in enumerate(L_values):
-        z_vals = [z_results[i][j].mean() for j in range(len(disorder_values))]
-        z_stderr = [z_results[i][j].std()/np.sqrt(num_iter) for j in range(len(disorder_values))]
-        axz.errorbar(disorder_values,z_vals,yerr=z_stderr,label=f"L={L}",marker='o',capthick=2)
+    # figz, axz = plt.subplots(figsize=(8,6))
+    # for i,L in enumerate(L_values):
+    #     z_vals = [z_results[i][j].mean() for j in range(len(disorder_values))]
+    #     z_stderr = [z_results[i][j].std()/np.sqrt(num_iter) for j in range(len(disorder_values))]
+    #     axz.errorbar(disorder_values,z_vals,yerr=z_stderr,label=f"L={L}",marker='o',capthick=2)
 
-    axz.set_xlabel("Disorder Strength")
-    axz.set_ylabel("z value")
-    axz.set_title("z value vs Disorder Strength for different System Sizes")
-    axz.legend()
-    axz.grid()
-    figz.savefig(f"1dAnderson_z_vs_disorder_Lmax{L_values[-1]}.png",dpi=300)
+    # axz.set_xlabel("Disorder Strength")
+    # axz.set_ylabel("z value")
+    # axz.set_title("z value vs Disorder Strength for different System Sizes")
+    # axz.legend()
+    # axz.grid()
+    # figz.savefig(f"1dAnderson_z_vs_disorder_Lmax{L_values[-1]}.png",dpi=300)
     
-    plt.show()
+    # plt.show()
 
 
 
