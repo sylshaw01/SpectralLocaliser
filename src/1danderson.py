@@ -122,14 +122,14 @@ if __name__ == '__main__':
 
     np.random.seed(42)
 
-    L_values = [500,1000,1500,2000,3000]
+    L_values = [500,1000]
     rho = 30
     kappa = 0.1
-    disorder_values = np.linspace(0.5,5,10)
-    num_iter = 1000
+    disorder_values = np.linspace(0,5,10)
+    num_iter = 500
     r_results = np.zeros((len(L_values),len(disorder_values),num_iter))
     z_results = np.zeros((len(L_values),len(disorder_values),num_iter))
-    with Pool(cpu_count) as pool:
+    with Pool(4) as pool:
         for j, L in enumerate(L_values):
 
             print(f"System size L: {L}",flush = True)
@@ -152,7 +152,7 @@ if __name__ == '__main__':
                 #print(f"    Time taken for disorder {disorder}: {end_time - start_time} seconds")
 
 
-filename = f"1dAnderson_rz_results_Lmax{L_values[-1]}_iters{num_iter}.npz"
+filename = f"../data/1dAnderson_rz_results_Lmax{L_values[-1]}_iters{num_iter}.npz"
 np.savez(filename, L_values=L_values, disorder_values=disorder_values, r_results=r_results, z_results=z_results)
 print(f"Results saved to {filename}")
 

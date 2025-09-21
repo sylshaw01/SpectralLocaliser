@@ -146,7 +146,7 @@ cpu_count = int(sys.argv[1]) if len(sys.argv) > 1 else cpu_count()
 if __name__ == '__main__':
     
 
-    L_values = [500,1000,1500,2000]
+    L_values = [500,1000,1500]
     rho = 30
     kappa = 0.1
     mass_values = np.linspace(0.5,5,10)
