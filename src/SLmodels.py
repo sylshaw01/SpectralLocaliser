@@ -146,7 +146,7 @@ class OneDimensionalSSH(Model):
         return localiser
 
 
-    def create_symmetry_reduced_localiser(self):
+    def create_symmetry_reduced_localiser(self, x0=0, E0=0):
         # creates symmetry reduced spectral localiser
         # I'm not sure why we have a 'localiser' and a 'symmetry reduced localiser'
         # but it is the SRL that we use to detect topology
@@ -157,17 +157,17 @@ class OneDimensionalSSH(Model):
         X = self.X
         H = self.H
         gamma = sp.bmat([[-sp.eye(self.L//2),sp.csr_matrix((self.L//2,self.L//2))],[sp.csr_matrix((self.L//2,self.L//2)),sp.eye(self.L//2)]],format='csr')
-        symmetry_reduced_localiser = ((kappa * X) - (1j * H)) @ gamma
+        symmetry_reduced_localiser = ((kappa * (X-(x0*sp.eye(self.L)))) - (1j * (H-(E0*sp.eye(self.L))))) @ gamma
 
         return symmetry_reduced_localiser
 
 
-    def calculate_winding_number(self):
+    def calculate_winding_number(self, x0=0, E0=0):
         # calculates the winding number from the SRL
         # v(X,H) = (1/2) * sig(SRL(X,H))
         # where sig of an operator is the number of positive eigvals - number of negative eigvals
 
-        SRL = self.create_symmetry_reduced_localiser()
+        SRL = self.create_symmetry_reduced_localiser(x0,E0)
         eigvals, eigvecs = self.find_eigenvalues(SRL, sparse=False)
 
         local_winding_number = (np.sum(eigvals > 0) - np.sum(eigvals < 0)) // 2
