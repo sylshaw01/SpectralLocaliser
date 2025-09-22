@@ -77,7 +77,6 @@ if __name__ == "__main__":
                 hz_results[i, j, :] = hz_values
                 slr_results[i, j, :] = slr_values
                 slz_results[i, j, :] = slz_values
-                print(f"    Disorder {disorder} complete", flush=True)
     
     filename = f"../data/1dAnderson_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realizations}_results.npz"
     np.savez(filename, L_values = L_values, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results)
