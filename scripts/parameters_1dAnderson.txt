@@ -1,10 +1,10 @@
 L_start = 500
-L_end = 2000
-L_resolution = 4
+L_end = 12000
+L_resolution = 24
 num_disorder_realizations = 1000
 rho = 30.0
 kappa = 0.1
 disorder_start = 0.1
-disorder_end =  1.1
-disorder_resolution =  6
+disorder_end =  1.5
+disorder_resolution =  20
 num_eigenvalues =  0.2

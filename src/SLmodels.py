@@ -48,7 +48,7 @@ class Model(ABC):
         if sparse == False or num_eigenvalues == self.L:
             eigvals, eigvecs = eigh(operator.toarray())
         else:
-            eigvals, eigvecs = eigsh(operator, k=num_eigenvalues, sigma=0, which='LM')
+            eigvals, eigvecs = eigsh(operator, k=num_eigenvalues, sigma =0, which='LM')
 
         return eigvals, eigvecs
     

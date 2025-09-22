@@ -5,7 +5,7 @@ datalocation = '../data/'
 import sys
 
 # load data
-data = np.load(datalocation + '1dAnderson_L200-400_rho30.0_kappa0.1_disorder0.0-5.0_numEigs0.2_realizations100_results.npz')
+data = np.load(datalocation + '1dAnderson_L200-2000_rho30.0_kappa0.1_disorder0.0-1.1_numEigs0.2_realizations1000_results.npz')
 L_values = data['L_values']
 disorder_values = data['disorder_values']
 hr_results = data['hr_results']

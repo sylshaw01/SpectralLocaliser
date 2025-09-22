@@ -20,8 +20,8 @@ def single_iteration(args):
     m = OneDimensionalAnderson(L, disorder, rho, kappa)
     hr, hz = m.compute_statistics(m.H,num_eigenvalues,sparse)
     slr, slz = m.compute_statistics(m.SL,num_eigenvalues,sparse)
-    if i % 200 ==0:
-        print(f"Completed {i} calculations")
+    if i % 500 ==0:
+        print(f"            Completed {i} calculations")
     return hr, hz, slr, slz
 
 
@@ -36,16 +36,16 @@ if __name__ == "__main__":
             if line.strip() and not line.startswith('#'):
                 key, value = line.split('=')
                 parameters[key.strip()] = value.strip()
-    L_start = int(parameters.get('L', 200))
+    L_start = int(parameters.get('L_start', 200))
     L_end = int(parameters.get('L_end', 400))
-    L_resolution = int(parameters.get('L_step', 3))
-    num_disorder_realizations = int(parameters.get('num_disorder_realizations', 100))
+    L_resolution = int(parameters.get('L_resolution', 3))
+    num_disorder_realizations = int(parameters.get('num_disorder_realisations', 100))
 
     rho = float(parameters.get('rho', 30.0))
     kappa = float(parameters.get('kappa', 0.1))
-    disorder_start = float(parameters.get('disorder', 0.0))
+    disorder_start = float(parameters.get('disorder_start', 0.0))
     disorder_end = float(parameters.get('disorder_end', 5.0))
-    disorder_resolution = int(parameters.get('disorder_step', 6))
+    disorder_resolution = int(parameters.get('disorder_resolution', 6))
     num_eigenvalues = float(parameters.get('num_eigenvalues', 0.2))
 
     L_values = np.linspace(L_start, L_end, L_resolution, dtype=int)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             modelToGetX =  OneDimensionalAnderson(L,0,rho,kappa)
             X = modelToGetX.X
             sparse = True
-            num_eig = int(0.2 * L)
+            num_eig = min(400,L//5)
             if L <= 400:
                 sparse = False
                 num_eig = None
