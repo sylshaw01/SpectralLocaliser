@@ -5,7 +5,7 @@ datalocation = '../data/'
 import sys
 
 # load data
-data = np.load(datalocation + '1dAnderson_L200-2000_rho30.0_kappa0.1_disorder0.0-1.1_numEigs0.2_realizations1000_results.npz')
+data = np.load(datalocation + '1dAnderson_L500-12000_rho30.0_kappa0.1_disorder0.1-1.5_numEigs0.2_realizations100_results.npz')
 L_values = data['L_values']
 disorder_values = data['disorder_values']
 hr_results = data['hr_results']
@@ -14,7 +14,7 @@ slr_results = data['slr_results']
 slz_results = data['slz_results']
 
 # plot data
-fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+fig, axs = plt.subplots(2, 2, figsize=(18, 18))
 for i, L in enumerate(L_values):
     hr_means = [hr_results[i][j].mean() for j in range(len(disorder_values))]
     hr_stds = [hr_results[i][j].std()/np.sqrt(hr_results.shape[2]) for j in range(len(disorder_values))]
@@ -52,5 +52,5 @@ axs[1, 1].set_ylabel('z')
 axs[1, 1].legend()
 axs[1, 1].grid()
 plt.tight_layout()
-plt.savefig(datalocation + '1dAnderson_analysis.png', dpi=300)
+plt.savefig('1dAnderson_analysis.png', dpi=300)
 plt.show()
