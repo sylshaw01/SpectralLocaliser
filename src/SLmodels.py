@@ -48,7 +48,7 @@ class Model(ABC):
         if sparse == False or num_eigenvalues == self.L:
             eigvals, eigvecs = eigh(operator.toarray())
         else:
-            eigvals, eigvecs = eigsh(operator, k=num_eigenvalues, sigma =0, which='LM')
+            eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues, which='SM')
 
         return eigvals, eigvecs
     
@@ -275,10 +275,18 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
 
 
 class TwoDimensionalMagneticAnderson(Model):
+
+    def __init__(self,L,disorder, rho, kappa,flux= X=None, Y=None),
+
     def create_hamiltonian(self):
         pass
 
     def create_position_operator(self):
+        xvals = np.linspace(-self.rho,self.rho,self.L)
+        xdiag = np.tile(xvals, self.L)
+        ydiag = np.repeat(xvals,self.L)
+        X = sp.spdiags(xdiag, 0, shape=(self.L**2,self.L**2), format="csr")
+        Y = sp.spdiags(ydiag, 0, shape=(self.L**2,self.L**2),format = "csr")
         pass
 
     def create_localiser(self):
@@ -289,6 +297,15 @@ class ThreeDimensionalAnderson(Model):
         pass
 
     def create_position_operator(self):
+        xvals = np.linspace(-self.rho,self.rho,self.L)
+        xdiag = np.tile(xvals, self.L**2) # for example if I had 3 sites with my system going between 0 and 2, my xdiag is 
+                                        #               [0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2]
+        ydiag= np.tile(np.repeat(xvals,self.L),self.L) # my ydiag is then [0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2]
+        zdiag = np.tile(xvals,self.L*self.L) # and my zdiag = [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2]
+
+        X = sp.spdiags(xdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+        Y = sp.spdiags(ydiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+        Z = sp.spdiags(zdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
         pass
 
     def create_localiser(self):

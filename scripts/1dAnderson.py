@@ -64,8 +64,8 @@ if __name__ == "__main__":
             modelToGetX =  OneDimensionalAnderson(L,0,rho,kappa)
             X = modelToGetX.X
             sparse = True
-            num_eig = min(400,L//5)
-            if L <= 400:
+            num_eig = 400
+            if L <= 800:
                 sparse = False
                 num_eig = None
             for j, disorder in enumerate(disorder_values):

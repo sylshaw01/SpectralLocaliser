@@ -67,7 +67,7 @@ if __name__ == "__main__":
             X = modelToGetX.X
             sparse = True
             num_eig = 400
-            if L <= 400:
+            if L <= 800:
                 sparse = False
                 num_eig = None
             for j, disorder in enumerate(disorder_values):
