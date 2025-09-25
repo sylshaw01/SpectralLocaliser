@@ -276,7 +276,8 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
 
 class TwoDimensionalMagneticAnderson(Model):
 
-    def __init__(self,L,disorder, rho, kappa,flux= X=None, Y=None),
+    def __init__(self,L,disorder, rho, kappa,flux=1,X=None, Y=None):
+        pass
 
     def create_hamiltonian(self):
         pass
@@ -294,7 +295,14 @@ class TwoDimensionalMagneticAnderson(Model):
 
 class ThreeDimensionalAnderson(Model):
     def create_hamiltonian(self):
-        pass
+        on_diag = (np.random.rand(self.L**3)-0.5) * self.disorder
+        off_diag = np.ones(self.L**3 - 1)
+        off_diag_L = np.ones(self.L**3 - self.L)
+        off_diag_L2 = np.ones(self.L**3 - self.L**2)
+
+        H = sp.diags([off_diag,off_diag,off_diag_L,off_diag_L,off_diag_L2,off_diag_L2,on_diag],
+                     [-1,1,-self.L,self.L,-self.L**2,self.L**2,0],
+                     shape=(self.L**3,self.L**3),format='csr')
 
     def create_position_operator(self):
         xvals = np.linspace(-self.rho,self.rho,self.L)
@@ -309,7 +317,14 @@ class ThreeDimensionalAnderson(Model):
         pass
 
     def create_localiser(self):
-        pass
+        pauli_x = sp.csr_matrix(np.array([[0,1],[1,0]]))
+        pauli_y = sp.csr_matrix(np.array([[0,-1j],[1j,0]]))
+        pauli_z = sp.csr_matrix(np.array([[1,0],[0,-1]]))
+        identity_2 = sp.eye(2,format='csr')
+        block1 = sp.kron(pauli_x, self.kappa * self.X, format='csr') + sp.kron(pauli_y, self.kappa * self.Y, format='csr') + sp.kron(pauli_z,self.kappa * self.Z, format='csr')
+        block2 = sp.kron(identity_2, self.H, format='csr')
+        localiser = sp.bmat([[-block2, block1],[block1, block2]], format='csr')
+        return localiser
 
 class ThreeDimensionalTopologicalChiralInsulator(Model):
     def create_hamiltonian(self):
