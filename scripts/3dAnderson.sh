@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-cat > jobSSH.sh << "EOF"
+cat > job.sh << "EOF"
 #!/bin/bash
 
 #SBATCH --nodes=1
@@ -22,7 +22,7 @@ export OMP_NUM_THREADS=1
 
 
 
-python 1dSSH_combined.py $p "$1"
+python 3dAnderson_combined.py $p "$1"
 EOF
 
 python - <<"EOF"
@@ -33,27 +33,27 @@ import sys
 with open("../src/SLmodels.py", "r") as f:
     slmodels_code = f.read()
 
-# read 1dSSH
-with open("1dSSH.py", "r") as f:
-    SSH_code = f.read()
+# read 1dAnderson
+with open("3dAnderson.py", "r") as f:
+    anderson_code = f.read()
 
-SSH_code = re.sub(r"^sys\.path\.append\(['\"]\.\.\/src['\"]\)$", "", SSH_code, flags=re.MULTILINE)
+anderson_code = re.sub(r"^sys\.path\.append\(['\"]\.\.\/src['\"]\)$", "", anderson_code, flags=re.MULTILINE)
 
-SSH_code = re.sub(r"^from SLmodels import \*$", "", SSH_code, flags=re.MULTILINE)
+anderson_code = re.sub(r"^from SLmodels import \*$", "", anderson_code, flags=re.MULTILINE)
 
 
 combined = f"""#!/usr/bin/env python3
 
 {slmodels_code}
 
-{SSH_code}
+{anderson_code}
 """
 
-with open("1dSSH_combined.py", "w") as f:
+with open("1dAnderson_combined.py", "w") as f:
     f.write(combined)
 EOF
 
-sbatch jobSSH.sh $1
+sbatch job.sh $1
 
 
 

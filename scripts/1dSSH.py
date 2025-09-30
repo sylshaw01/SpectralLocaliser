@@ -66,7 +66,7 @@ if __name__ == "__main__":
             modelToGetX =  OneDimensionalSSHBlockBasis(L,0,rho,kappa,v,w)
             X = modelToGetX.X
             sparse = True
-            num_eig = 300
+            num_eig = 200
             if L <= 600:
                 sparse = False
                 num_eig = None
