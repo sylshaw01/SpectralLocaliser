@@ -4,7 +4,7 @@ from scipy.sparse.linalg import eigsh
 from scipy.linalg import eigh
 from abc import ABC, abstractmethod
 
-
+# Generic base class for models
 class Model(ABC):
 
     def __init__(self,L,disorder, rho, kappa, X=None):
@@ -15,6 +15,7 @@ class Model(ABC):
         self.X = X if X is not None else self.create_position_operator() 
         self.H = self.create_hamiltonian()
         self.SL = self.create_localiser()
+    
     
     @abstractmethod
     def create_hamiltonian(self):
@@ -48,38 +49,56 @@ class Model(ABC):
         if sparse == False or num_eigenvalues == self.L:
             eigvals, eigvecs = eigh(operator.toarray())
         else:
-            eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues, which='SM')
+            eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues,sigma = 1e-4, which='LM')
 
         return eigvals, eigvecs
     
     def calculate_r(self, eigvals):
+        # finds the r value from a list of eigenvalues
+        #
+        # args:
+        #  eigvals: array of eigenvalues
+        #
+        # returns:
+        # r: the mean adjacent gap ratio
         # Once eigenvalues are found, calculate the r value
-        eigvals_s = np.diff(eigvals)
-        min_vals = np.minimum(eigvals_s[:-1],eigvals_s[1:])
-        max_vals = np.maximum(eigvals_s[:-1],eigvals_s[1:])
-        r = np.divide(min_vals,max_vals,out=np.zeros_like(min_vals, dtype=float),where=max_vals!=0)
+        eigvals_s = np.diff(eigvals) # calculates eigvals[i+1]-eigvals[i] for all i
+        min_vals = np.minimum(eigvals_s[:-1],eigvals_s[1:]) # min(s_i,s_(i+1))
+        max_vals = np.maximum(eigvals_s[:-1],eigvals_s[1:]) # max(s_i,s_(i+1))
+        r = np.divide(min_vals,max_vals,out=np.zeros_like(min_vals, dtype=float),where=max_vals!=0) # vectorised division
         return r.mean()
     
     def calculate_z(self, eigvals):
-        s = np.diff(eigvals)
-        s_i_minus_2 = s[:-4]
-        s_i_minus_1 = s[1:-3]
-        s_i         = s[2:-2]
-        s_i_plus_1  = s[3:-1]
+        s = np.diff(eigvals) # calculates eigvals[i+1]-eigvals[i] for all i
+        s_i_minus_2 = s[:-4] # s from 0 to len(s)-4
+        s_i_minus_1 = s[1:-3] # s from 1 to len(s)-3
+        s_i         = s[2:-2] # s from 2 to len(s)-2
+        s_i_plus_1  = s[3:-1] # s from 3 to len(s)-1
+        # naming of minus and plus is because these are all arrays of length len(s)-4, but shifted slightly relative to s_i
 
-        nn      = np.minimum(s_i, s_i_minus_1)
-        n_other = np.maximum(s_i, s_i_minus_1)
-        nnn_left  = s_i_minus_1 + s_i_minus_2
-        nnn_right = s_i + s_i_plus_1
+        nn      = np.minimum(s_i, s_i_minus_1) # the nearest neighbour is the minimum of s_i and s_(i-1)
+        n_other = np.maximum(s_i, s_i_minus_1) # the other nearest neighbour is the maximum of s_i and s_(i-1)
+        nnn_left  = s_i_minus_1 + s_i_minus_2 # next nearest neighbour to the left
+        nnn_right = s_i + s_i_plus_1 # next nearest neighbour to the right
         
-        nnn = np.minimum.reduce([n_other, nnn_left, nnn_right])
+        nnn = np.minimum.reduce([n_other, nnn_left, nnn_right]) # the next nearest neighbour is the minimum of the three possible candidates
 
-        z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0)
+        z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0) # vectorised division
         return z.mean()
     
     def compute_statistics(self, operator, num_eigenvalues=None, sparse=True):
+        # given an operator, computer the r and z statistics
+        #
+        # args:
+        #  operator: the operator (typically a scipy sparse matrix) to find eigenvalues of.
+        #  num_eigenvalues: the number of eigenvalues to search for. Only applies when using sparse solver.
+        #  sparse: Boolean to explicitly use sparse solver or not
+        #
+        # returns:
+        #  r: the mean adjacent gap ratio
+        #  z: the mean next nearest neighbour ratio
         eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
-        positive_eigvals = eigvals[eigvals > 0]
+        positive_eigvals = eigvals[eigvals > 0] 
         r = self.calculate_r(positive_eigvals)
         z = self.calculate_z(positive_eigvals)
         return r, z
@@ -276,7 +295,7 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
 
 class TwoDimensionalMagneticAnderson(Model):
 
-    def __init__(self,L,disorder, rho, kappa,flux=1,X=None, Y=None):
+    def __init__(self,L,disorder, rho, kappa,flux=1,X=None):
         pass
 
     def create_hamiltonian(self):
@@ -295,33 +314,63 @@ class TwoDimensionalMagneticAnderson(Model):
 
 class ThreeDimensionalAnderson(Model):
     def create_hamiltonian(self):
-        on_diag = (np.random.rand(self.L**3)-0.5) * self.disorder
-        off_diag = np.ones(self.L**3 - 1)
-        off_diag_L = np.ones(self.L**3 - self.L)
-        off_diag_L2 = np.ones(self.L**3 - self.L**2)
+        N = self.L**3
+        L = self.L
 
-        H = sp.diags([off_diag,off_diag,off_diag_L,off_diag_L,off_diag_L2,off_diag_L2,on_diag],
-                     [-1,1,-self.L,self.L,-self.L**2,self.L**2,0],
-                     shape=(self.L**3,self.L**3),format='csr')
+        # On-diagonal disorder (this part was correct)
+        on_diag = (np.random.rand(N) - 0.5) * self.disorder
+
+        # Create off-diagonals for hopping terms
+        # Hopping in x-direction
+        off_diag_x = np.ones(N - 1)
+        off_diag_x[L-1::L] = 0 # Prevent hopping between rows
+
+        # Hopping in y-direction
+        off_diag_y = np.ones(N - L)
+        off_diag_y[L*(L-1)::L*L] = 0 # Prevent hopping between planes
+
+        # Hopping in z-direction
+        off_diag_z = np.ones(N - L*L)
+
+        H = sp.diags(
+            [
+                on_diag,
+                off_diag_x, off_diag_x,
+                off_diag_y, off_diag_y,
+                off_diag_z, off_diag_z
+            ],
+            [
+                0,
+                -1, 1,
+                -L, L,
+                -L*L, L*L
+            ],
+            shape=(N, N),
+            format='csr'
+        )
+        
+        return H
 
     def create_position_operator(self):
         xvals = np.linspace(-self.rho,self.rho,self.L)
         xdiag = np.tile(xvals, self.L**2) # for example if I had 3 sites with my system going between 0 and 2, my xdiag is 
                                         #               [0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2]
         ydiag= np.tile(np.repeat(xvals,self.L),self.L) # my ydiag is then [0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2]
-        zdiag = np.tile(xvals,self.L*self.L) # and my zdiag = [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2]
+        zdiag = np.repeat(xvals,self.L*self.L) # and my zdiag = [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2]
 
-        X = sp.spdiags(xdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
-        Y = sp.spdiags(ydiag, 0, shape=(self.L**3,self.L**3),format = "csr")
-        Z = sp.spdiags(zdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
-        pass
+        X = sp.diags(xdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+        Y = sp.diags(ydiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+        Z = sp.diags(zdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+
+        return [X,Y,Z]
+        
 
     def create_localiser(self):
         pauli_x = sp.csr_matrix(np.array([[0,1],[1,0]]))
         pauli_y = sp.csr_matrix(np.array([[0,-1j],[1j,0]]))
         pauli_z = sp.csr_matrix(np.array([[1,0],[0,-1]]))
         identity_2 = sp.eye(2,format='csr')
-        block1 = sp.kron(pauli_x, self.kappa * self.X, format='csr') + sp.kron(pauli_y, self.kappa * self.Y, format='csr') + sp.kron(pauli_z,self.kappa * self.Z, format='csr')
+        block1 = sp.kron(pauli_x, self.kappa * self.X[0], format='csr') + sp.kron(pauli_y, self.kappa * self.X[1], format='csr') + sp.kron(pauli_z,self.kappa * self.X[2], format='csr')
         block2 = sp.kron(identity_2, self.H, format='csr')
         localiser = sp.bmat([[-block2, block1],[block1, block2]], format='csr')
         return localiser
