@@ -5,7 +5,7 @@ datalocation = '../data/'
 import sys
 
 # load data
-data = np.load(datalocation + '../data/1dAnderson_L7000-7000_rho30.0_kappa0.1_disorder0.1-2.0_numEigs600_realizations1000_results.npz')
+data = np.load(datalocation + '../data/1dSSH_L10000-5000_rho30.0_kappa0.1_disorder0.1-2.0_numEigs600_realizations100_results.npz')
 L_values = data['L_values']
 disorder_values = data['disorder_values']
 hr_results = data['hr_results']
@@ -52,5 +52,5 @@ axs[1, 1].set_ylabel('z')
 axs[1, 1].legend()
 axs[1, 1].grid()
 plt.tight_layout()
-plt.savefig('1dAnderson_analysis-7000-1000.png', dpi=300)
+plt.savefig('1dSSH_analysis.png', dpi=300)
 plt.show()

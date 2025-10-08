@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-cat > job3da.sh << "EOF"
+cat > job3dAadaptiverho.sh << "EOF"
 #!/bin/bash
 
 #SBATCH --nodes=1
@@ -22,7 +22,7 @@ export OMP_NUM_THREADS=1
 
 
 
-python 3dAnderson_combined.py $p "$1"
+python 3dAndersonadaptive_rho_combined.py $p "$1"
 EOF
 
 python - <<"EOF"
@@ -34,7 +34,7 @@ with open("../src/SLmodels.py", "r") as f:
     slmodels_code = f.read()
 
 # read 1dAnderson
-with open("3dAnderson.py", "r") as f:
+with open("3dAndersonFollowrho.py", "r") as f:
     anderson_code = f.read()
 
 anderson_code = re.sub(r"^sys\.path\.append\(['\"]\.\.\/src['\"]\)$", "", anderson_code, flags=re.MULTILINE)
@@ -49,11 +49,11 @@ combined = f"""#!/usr/bin/env python3
 {anderson_code}
 """
 
-with open("3dAnderson_combined.py", "w") as f:
+with open("3dAndersonadaptive_rho_combined.py", "w") as f:
     f.write(combined)
 EOF
 
-sbatch job3da.sh $1
+sbatch job3dAadaptiverho.sh $1
 
 
 

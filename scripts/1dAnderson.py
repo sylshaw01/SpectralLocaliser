@@ -46,7 +46,10 @@ if __name__ == "__main__":
     disorder_start = float(parameters.get('disorder_start', 0.0))
     disorder_end = float(parameters.get('disorder_end', 5.0))
     disorder_resolution = int(parameters.get('disorder_resolution', 6))
-    num_eigenvalues = float(parameters.get('num_eigenvalues', 0.2))
+    num_eigenvalues = int(parameters.get('num_eigenvalues', 600))
+
+
+    np.random.seed(int(parameters.get('seed', 99)))
 
     L_values = np.linspace(L_start, L_end, L_resolution, dtype=int)
     disorder_values = np.linspace(disorder_start, disorder_end, disorder_resolution)
@@ -61,13 +64,11 @@ if __name__ == "__main__":
     with Pool(processes=cpu_count, maxtasksperchild=10) as pool:
         for i, L in enumerate(L_values):
             print(f"System size L: {L}", flush=True)
+            # Instantiate a model just to get X
             modelToGetX =  OneDimensionalAnderson(L,0,rho,kappa)
             X = modelToGetX.X
             sparse = True
-            num_eig = 300
-            if L <= 600:
-                sparse = False
-                num_eig = None
+            num_eig = num_eigenvalues
             for j, disorder in enumerate(disorder_values):
                 print(f"   Disorder: {disorder}", flush=True)
                 args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse, i) for i in range(num_disorder_realizations)]

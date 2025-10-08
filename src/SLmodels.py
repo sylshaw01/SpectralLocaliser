@@ -44,12 +44,12 @@ class Model(ABC):
         #  eigvecs: array of eigenvectors
 
         if num_eigenvalues is None:
-            num_eigenvalues = self.L // 5
+            num_eigenvalues = operator.shape[0] // 5
         
         if sparse == False or num_eigenvalues == self.L:
             eigvals, eigvecs = eigh(operator.toarray())
         else:
-            eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues,sigma = 1e-4, which='LM')
+            eigvals, eigvecs = eigsh(operator, k=num_eigenvalues,sigma = 1.234e-4, which='LM')
 
         return eigvals, eigvecs
     
@@ -86,7 +86,7 @@ class Model(ABC):
         z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0) # vectorised division
         return z.mean()
     
-    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True):
+    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-10):
         # given an operator, computer the r and z statistics
         #
         # args:
@@ -98,7 +98,17 @@ class Model(ABC):
         #  r: the mean adjacent gap ratio
         #  z: the mean next nearest neighbour ratio
         eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
-        positive_eigvals = eigvals[eigvals > 0] 
+        positive_eigvals = np.sort(eigvals)
+        print(f"Found {len(positive_eigvals)} eigenvalues")
+        positive_eigvals = eigvals[positive_eigvals > 0] 
+        print(f"Found {len(positive_eigvals)} positive eigenvalues")
+        usable_eigvals  = [positive_eigvals[0]] if len(positive_eigvals) > 0 else []
+        
+        for val in positive_eigvals[1:]:
+            if val - usable_eigvals[-1] > tolerance:
+                usable_eigvals.append(val)
+        print(f"After applying tolerance of {tolerance}, count is {len(usable_eigvals)}")
+        positive_eigvals = np.array(usable_eigvals)
         r = self.calculate_r(positive_eigvals)
         z = self.calculate_z(positive_eigvals)
         return r, z
@@ -116,7 +126,7 @@ class OneDimensionalAnderson(Model):
         # off diagonal hopping terms
         off_diag = np.ones(L-1)
 
-        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='lil')
+        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='csr')
 
         return H
     
@@ -312,24 +322,58 @@ class TwoDimensionalMagneticAnderson(Model):
     def create_localiser(self):
         pass
 
+
+class TwoDimensionalLiebModel(Model):
+    pass
+
 class ThreeDimensionalAnderson(Model):
+
+
+    def __init__(self, L, disorder, rho, kappa, X=None):
+        # Initialize all attributes directly without calling parent __init__
+        self.L = L
+        self.disorder = disorder
+        self.rho = rho
+        self.kappa = kappa
+        
+        # Create position operators (list of 3) and other operators
+        self.X = X if X is not None else self.create_position_operator()
+        self.H = self.create_hamiltonian()
+        self.SL = self.create_localiser()
+
     def create_hamiltonian(self):
         N = self.L**3
         L = self.L
 
-        # On-diagonal disorder (this part was correct)
+
+
+        # L = 3 example
+        
+
+        # (w, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0 ...)
+        # (1, w, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, ....)
+        # (0, 1, w, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, ....)
+
+        # on diagonal disorder term
         on_diag = (np.random.rand(N) - 0.5) * self.disorder
 
         # Create off-diagonals for hopping terms
         # Hopping in x-direction
+        # make a fully one off-diagonal
         off_diag_x = np.ones(N - 1)
-        off_diag_x[L-1::L] = 0 # Prevent hopping between rows
+        # then set to zero all of the elements at the far x edge
+        off_diag_x[L-1::L] = 0 
 
+        # np.arange gets [0,1,2,..,N-L-1]
+        # then % (L*L) gets the position in the current yz plane
+        # then // L gets the y coordinate
+        # so mask_y is true for all elements at the far y edge
+        y_coords = (np.arange(N-L) % (L*L)) // L
+        mask_y = (y_coords == L-1)
         # Hopping in y-direction
         off_diag_y = np.ones(N - L)
-        off_diag_y[L*(L-1)::L*L] = 0 # Prevent hopping between planes
-
-        # Hopping in z-direction
+        off_diag_y[mask_y] = 0 
+        # z is easy because we don't have to worry about edges
         off_diag_z = np.ones(N - L*L)
 
         H = sp.diags(

@@ -20,7 +20,7 @@ def single_iteration(args):
     m = ThreeDimensionalAnderson(L, disorder, rho, kappa)
     hr, hz = m.compute_statistics(m.H,num_eigenvalues,sparse)
     slr, slz = m.compute_statistics(m.SL,num_eigenvalues,sparse)
-    if i % 500 ==0:
+    if i % 100 ==0:
         print(f"            Completed {i} calculations")
     return hr, hz, slr, slz
 
@@ -29,6 +29,10 @@ def single_iteration(args):
 if __name__ == "__main__":
     cpu_count = int(sys.argv[1]) if len(sys.argv) > 1 else cpu_count()
     parameters_file = sys.argv[2] if len(sys.argv) > 2 else 'parameters_3dAnderson.txt'
+
+    print("-"*50)
+    print("Calculating 3D Anderson model Hamiltonian and spectral localiser statistics")
+    print("-"*50)
 
     parameters = {}
     with open(parameters_file, 'r') as f:
@@ -46,7 +50,17 @@ if __name__ == "__main__":
     disorder_start = float(parameters.get('disorder_start', 2))
     disorder_end = float(parameters.get('disorder_end', 20))
     disorder_resolution = int(parameters.get('disorder_resolution', 10))
-    num_eigenvalues = float(parameters.get('num_eigenvalues', 0.2))
+    num_eigenvalues = int(parameters.get('num_eigenvalues', 600))
+
+    print(f"{cpu_count} Cores found! Using...All of them!!")
+    print(f"Parameters loaded from {parameters_file}")
+    print(f"L from {L_start} to {L_end} with {L_resolution} steps")
+    print(f"Disorder from {disorder_start} to {disorder_end} with {disorder_resolution} steps")
+    print(f"{num_disorder_realizations} disorder realizations per parameter set")
+    print(f"Calculating {num_eigenvalues} eigenvalues per run")
+    print("-"*50, flush=True)
+
+    np.random.seed(int(parameters.get('seed', 99)))
 
     L_values = np.linspace(L_start, L_end, L_resolution, dtype=int)
     disorder_values = np.linspace(disorder_start, disorder_end, disorder_resolution)
@@ -64,10 +78,7 @@ if __name__ == "__main__":
             modelToGetX =  ThreeDimensionalAnderson(L,0,rho,kappa)
             X = modelToGetX.X
             sparse = True
-            num_eig = 300
-            if L <= 600:
-                sparse = False
-                num_eig = None
+            num_eig = num_eigenvalues
             for j, disorder in enumerate(disorder_values):
                 print(f"   Disorder: {disorder}", flush=True)
                 args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse, i) for i in range(num_disorder_realizations)]
