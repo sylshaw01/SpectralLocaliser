@@ -1,0 +1,11 @@
+L_start = 14
+L_end = 14
+L_resolution = 1
+num_disorder_realisations = 100
+rho = 60.0
+kappa = 0.1
+disorder_start = 2
+disorder_end =  20
+disorder_resolution =  10
+num_eigenvalues =  2400
+seed = 99

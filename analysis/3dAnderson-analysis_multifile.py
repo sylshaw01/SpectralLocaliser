@@ -2,26 +2,40 @@ import numpy as np
 import matplotlib.pyplot as plt
 import glob
 import re
-import datetime
+import datetime as dt
 import os
 
 datalocation = '../data/'
 figure_destination = '../figures/'
 
 
-file_pattern = os.path.join(datalocation, '3dAnderson_L*_rho60.0_kappa0.1_disorder2.0-20.0_numEigs400_realizations100_results.npz')
-file_list = sorted(glob.glob(file_pattern))
+daterange_start_str = '2025-10-11'
+daterange_end_str = '2025-10-25'
 
-if not file_list:
-    print(f"Error: No data files found matching the pattern in '{datalocation}'.")
-    print(f"Pattern used: {file_pattern}")
-    exit()
+start_date = dt.datetime.strptime(daterange_start_str, '%Y-%m-%d')
+end_date = dt.datetime.strptime(daterange_end_str, '%Y-%m-%d')
 
-print(f"Found {len(file_list)} files to analyse.")
+file_pattern = os.path.join(datalocation, '3dAnderson_L*_rho60.0_kappa0.1_disorder2.0-20.0_*_results.npz')
+initial_file_list = sorted(glob.glob(file_pattern))
+
+# --- Filter the list based on the date range ---
+filtered_list = []
+for filepath in initial_file_list:
+    # Use a regular expression to extract the date (YYYY-MM-DD)
+    match = re.search(r'_(\d{4}-\d{2}-\d{2})_results\.npz$', filepath)
+    if match:
+        date_str = match.group(1)
+        file_date = dt.datetime.strptime(date_str, '%Y-%m-%d')
+        # Check if the file's date is within the desired range
+        if start_date <= file_date <= end_date:
+            filtered_list.append(filepath)
+
+
+
 
 fig, axs = plt.subplots(2, 2, figsize=(18, 18), constrained_layout=True)
 
-for filepath in file_list:
+for filepath in filtered_list:
     match = re.search(r'_L(\d+)(?:-\d+)?_', filepath)
     if not match:
         print(f"Warning: Could not extract L-value from filename: {os.path.basename(filepath)}. Skipping.")
@@ -94,7 +108,7 @@ fig.suptitle('Analysis of Hamiltonian and Spectral Localizer Statistics', fontsi
 
 
 # Generate a safe filename with the current date and time
-now = datetime.datetime.now()
+now = dt.datetime.now()
 filename = '3dAnderson_analysis_' + now.strftime("%Y%m%d_%H%M%S") + '.png'
 plt.savefig(os.path.join(figure_destination, filename))
 

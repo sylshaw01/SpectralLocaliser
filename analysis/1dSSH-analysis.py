@@ -31,6 +31,11 @@ for i, L in enumerate(L_values):
     slz_means = [slz_results[i][j].mean() for j in range(len(disorder_values))]
     slz_stds = [slz_results[i][j].std()/np.sqrt(slz_results.shape[2]) for j in range(len(disorder_values))]
     axs[1, 1].errorbar(disorder_values, slz_means, yerr=slz_stds, label=f'L={L}', marker='o', capsize=3)
+
+# add title to entire figure
+
+
+
 axs[0, 0].set_title('r of Hamiltonian')
 axs[0, 0].set_xlabel('Disorder Strength')
 axs[0, 0].set_ylabel('r')

@@ -3,6 +3,8 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import eigsh
 from scipy.linalg import eigh
 from abc import ABC, abstractmethod
+from petsc4py import PETSc
+from slepc4py import SLEPc
 
 # Generic base class for models
 class Model(ABC):
@@ -86,7 +88,7 @@ class Model(ABC):
         z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0) # vectorised division
         return z.mean()
     
-    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-10):
+    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-7, slepc=False):
         # given an operator, computer the r and z statistics
         #
         # args:
@@ -97,21 +99,90 @@ class Model(ABC):
         # returns:
         #  r: the mean adjacent gap ratio
         #  z: the mean next nearest neighbour ratio
-        eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
-        positive_eigvals = np.sort(eigvals)
-        print(f"Found {len(positive_eigvals)} eigenvalues")
-        positive_eigvals = eigvals[positive_eigvals > 0] 
-        print(f"Found {len(positive_eigvals)} positive eigenvalues")
+        if slepc:
+            eigvals, eigvecs = self.find_eigvals_slepc(operator,num_eigenvalues)
+        else:
+            eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
+        sorted_eigvals = np.sort(eigvals)
+        #print(f"Found {len(sorted_eigvals)} eigenvalues")
+        positive_eigvals = sorted_eigvals[sorted_eigvals > 0] 
+        #print(f"Found {len(positive_eigvals)} positive eigenvalues")
         usable_eigvals  = [positive_eigvals[0]] if len(positive_eigvals) > 0 else []
         
         for val in positive_eigvals[1:]:
             if val - usable_eigvals[-1] > tolerance:
                 usable_eigvals.append(val)
-        print(f"After applying tolerance of {tolerance}, count is {len(usable_eigvals)}")
+        #print(f"After applying tolerance of {tolerance}, count is {len(usable_eigvals)}")
         positive_eigvals = np.array(usable_eigvals)
         r = self.calculate_r(positive_eigvals)
         z = self.calculate_z(positive_eigvals)
         return r, z
+    
+    
+    
+    def find_eigvals_slepc(self, operator, num_eigenvalues=None):
+        """
+        Finds eigenvalues and eigenvectors using SLEPc's Jacobi-Davidson solver.
+        ...
+        """
+        if num_eigenvalues is None:
+            num_eigenvalues = operator.shape[0] // 5
+
+        # 1. Convert the SciPy sparse matrix to a PETSc Mat
+        petsc_op = PETSc.Mat().createAIJ(
+            size=operator.shape,
+            csr=(operator.indptr, operator.indices, operator.data)
+        )
+
+        # 2. Create the Eigenvalue Problem Solver (EPS)
+        Eps = SLEPc.EPS().create(comm=PETSc.COMM_WORLD)
+        Eps.setOperators(petsc_op)
+        Eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
+
+        # 3. Set the solver type to Jacobi-Davidson (JD)
+        Eps.setType(SLEPc.EPS.Type.JD)
+
+        # --- THE FIX: SET OPTIONS FOR THE INTERNAL SOLVER ---
+        # Get the global PETSc options object
+        opts = PETSc.Options()
+        # Set the KSP and PC types using the correct SLEPc prefix for JD
+        opts.setValue('eps_jd_ksp_type', 'gmres')
+        opts.setValue('eps_jd_pc_type', 'ilu')
+        # ---------------------------------------------------
+
+        # 5. Configure the eigenvalue search
+        Eps.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_MAGNITUDE)
+        Eps.setTarget(1.234e-4)
+        Eps.setDimensions(nev=num_eigenvalues)
+
+        # This call now reads the options we just set programmatically
+        Eps.setFromOptions()
+
+        # 6. Solve the problem
+        Eps.solve()
+
+        # 7. Retrieve and format the results (this part is unchanged)
+        nconv = Eps.getConverged()
+        eigvals = []
+        eigvecs_list = []
+        if nconv > 0:
+            vr, vi = petsc_op.createVecs()
+            for i in range(nconv):
+                k = Eps.getEigenpair(i, vr, vi)
+                eigvals.append(k.real)
+                eigvecs_list.append(vr.getArray().copy())
+
+        eigvals = np.array(eigvals)
+        if not eigvecs_list:
+            eigvecs = np.array([]).reshape(operator.shape[0], 0)
+        else:
+            eigvecs = np.array(eigvecs_list).T
+
+        sort_indices = np.argsort(eigvals)
+        eigvals = eigvals[sort_indices]
+        eigvecs = eigvecs[:, sort_indices]
+
+        return eigvals, eigvecs
     
 
 

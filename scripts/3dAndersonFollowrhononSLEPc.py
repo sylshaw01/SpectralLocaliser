@@ -20,10 +20,9 @@ def single_iteration(args):
     #start_time = time.time()
     L, rho, kappa, disorder, num_eigenvalues, X, sparse, i = args
     seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
-    np.random.seed(seed)
     m = ThreeDimensionalAnderson(L, disorder, rho, kappa, X)
-    hr, hz = m.compute_statistics(m.H,num_eigenvalues,sparse,1e-7, True)
-    slr, slz = m.compute_statistics(m.SL,4 * num_eigenvalues,sparse,1e-7, True)
+    hr, hz = m.compute_statistics(m.H,num_eigenvalues,sparse,1e-7, False)
+    slr, slz = m.compute_statistics(m.SL,4 * num_eigenvalues,sparse,1e-7, False)
     if i % 100 ==0:
         print(f"            Completed {i} calculations")
     #    print(f"            Time taken for iteration {i}: {time.time() - start_time:.2f} seconds")
@@ -105,9 +104,10 @@ if __name__ == "__main__":
                 seeds[i, j, :] = seed_values
             print(f"         Time taken for all disorder values at L={L}: {time.time() - L_val_time:.2f} seconds", flush=True)
     print(f"Total time taken for all calculations: {time.time() - total_time:.2f} seconds", flush=True)
-    #find current date
+    #find current date and time
     import datetime
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    current_date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     filename = f"../data/3dAnderson_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realizations}_{current_date}_results.npz"
     np.savez(filename, L_values = L_values, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds)
     print(f"Results saved to {filename}", flush=True)
