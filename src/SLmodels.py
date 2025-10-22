@@ -3,8 +3,8 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import eigsh
 from scipy.linalg import eigh
 from abc import ABC, abstractmethod
-from petsc4py import PETSc
-from slepc4py import SLEPc
+# from petsc4py import PETSc
+# from slepc4py import SLEPc
 
 # Generic base class for models
 class Model(ABC):
@@ -120,70 +120,101 @@ class Model(ABC):
     
     
     
-    def find_eigvals_slepc(self, operator, num_eigenvalues=None):
-        """
-        Finds eigenvalues and eigenvectors using SLEPc's Jacobi-Davidson solver.
-        ...
-        """
-        if num_eigenvalues is None:
-            num_eigenvalues = operator.shape[0] // 5
+    # def find_eigvals_slepc(self, operator, num_eigenvalues=None):
+    #     """
+    #     Finds eigenvalues and eigenvectors using SLEPc's Jacobi-Davidson solver.
+    #     ...
+    #     """
+    #     if num_eigenvalues is None:
+    #         num_eigenvalues = operator.shape[0] // 5
 
-        # 1. Convert the SciPy sparse matrix to a PETSc Mat
-        petsc_op = PETSc.Mat().createAIJ(
-            size=operator.shape,
-            csr=(operator.indptr, operator.indices, operator.data)
-        )
+    #     # 1. Convert the SciPy sparse matrix to a PETSc Mat
+    #     petsc_op = PETSc.Mat().createAIJ(
+    #         size=operator.shape,
+    #         csr=(operator.indptr, operator.indices, operator.data)
+    #     )
 
-        # 2. Create the Eigenvalue Problem Solver (EPS)
-        Eps = SLEPc.EPS().create(comm=PETSc.COMM_WORLD)
-        Eps.setOperators(petsc_op)
-        Eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
+    #     # 2. Create the Eigenvalue Problem Solver (EPS)
+    #     Eps = SLEPc.EPS().create(comm=PETSc.COMM_WORLD)
+    #     Eps.setOperators(petsc_op)
+    #     Eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
 
-        # 3. Set the solver type to Jacobi-Davidson (JD)
-        Eps.setType(SLEPc.EPS.Type.JD)
+    #     # 3. Set the solver type to Jacobi-Davidson (JD)
+    #     Eps.setType(SLEPc.EPS.Type.JD)
 
-        # --- THE FIX: SET OPTIONS FOR THE INTERNAL SOLVER ---
-        # Get the global PETSc options object
-        opts = PETSc.Options()
-        # Set the KSP and PC types using the correct SLEPc prefix for JD
-        opts.setValue('eps_jd_ksp_type', 'gmres')
-        opts.setValue('eps_jd_pc_type', 'ilu')
-        # ---------------------------------------------------
+    #     # --- THE FIX: SET OPTIONS FOR THE INTERNAL SOLVER ---
+    #     # Get the global PETSc options object
+    #     opts = PETSc.Options()
+    #     # Set the KSP and PC types using the correct SLEPc prefix for JD
+    #     opts.setValue('eps_jd_ksp_type', 'gmres')
+    #     opts.setValue('eps_jd_pc_type', 'ilu')
+    #     # ---------------------------------------------------
 
-        # 5. Configure the eigenvalue search
-        Eps.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_MAGNITUDE)
-        Eps.setTarget(1.234e-4)
-        Eps.setDimensions(nev=num_eigenvalues)
+    #     # 5. Configure the eigenvalue search
+    #     Eps.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_MAGNITUDE)
+    #     Eps.setTarget(1.234e-4)
+    #     Eps.setDimensions(nev=num_eigenvalues)
 
-        # This call now reads the options we just set programmatically
-        Eps.setFromOptions()
+    #     # This call now reads the options we just set programmatically
+    #     Eps.setFromOptions()
 
-        # 6. Solve the problem
-        Eps.solve()
+    #     # 6. Solve the problem
+    #     Eps.solve()
 
-        # 7. Retrieve and format the results (this part is unchanged)
-        nconv = Eps.getConverged()
-        eigvals = []
-        eigvecs_list = []
-        if nconv > 0:
-            vr, vi = petsc_op.createVecs()
-            for i in range(nconv):
-                k = Eps.getEigenpair(i, vr, vi)
-                eigvals.append(k.real)
-                eigvecs_list.append(vr.getArray().copy())
+    #     # 7. Retrieve and format the results (this part is unchanged)
+    #     nconv = Eps.getConverged()
+    #     eigvals = []
+    #     eigvecs_list = []
+    #     if nconv > 0:
+    #         vr, vi = petsc_op.createVecs()
+    #         for i in range(nconv):
+    #             k = Eps.getEigenpair(i, vr, vi)
+    #             eigvals.append(k.real)
+    #             eigvecs_list.append(vr.getArray().copy())
 
-        eigvals = np.array(eigvals)
-        if not eigvecs_list:
-            eigvecs = np.array([]).reshape(operator.shape[0], 0)
-        else:
-            eigvecs = np.array(eigvecs_list).T
+    #     eigvals = np.array(eigvals)
+    #     if not eigvecs_list:
+    #         eigvecs = np.array([]).reshape(operator.shape[0], 0)
+    #     else:
+    #         eigvecs = np.array(eigvecs_list).T
 
-        sort_indices = np.argsort(eigvals)
-        eigvals = eigvals[sort_indices]
-        eigvecs = eigvecs[:, sort_indices]
+    #     sort_indices = np.argsort(eigvals)
+    #     eigvals = eigvals[sort_indices]
+    #     eigvecs = eigvecs[:, sort_indices]
 
-        return eigvals, eigvecs
+    #     return eigvals, eigvecs
     
+
+class OneDimensionalAubryAndre(Model):
+
+    def create_hamiltonian(self):
+        L = self.L
+        disorder = self.disorder
+
+        # on diagonal disorder
+        diag = disorder * np.cos(2 * np.pi * np.arange(L) / (L / 1.61803398875))  # using golden ratio for incommensurability
+        # off diagonal hopping terms
+        off_diag = np.ones(L-1)
+
+        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='csr')
+
+        return H
+    
+    def create_position_operator(self):
+
+        row_vector = np.linspace(-self.rho,self.rho,self.L)
+        X = sp.diags(row_vector,0,shape=(self.L,self.L),format='csr')
+        return X
+
+    def create_localiser(self):
+        kappa = self.kappa
+        X = self.X
+        H = self.H
+
+        localiser = sp.bmat([[-H, kappa * X], [kappa * X, H]], format='csr')
+        #localiser = sp.csr_matrix(localiser)
+
+        return localiser
 
 
 class OneDimensionalAnderson(Model):
