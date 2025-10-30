@@ -19,7 +19,7 @@ def single_iteration(args):
     L, rho, kappa, disorder, num_eigenvalues, X, sparse, v,w, i = args
     seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
     np.random.seed(seed)
-    m = OneDimensionalSSHBlockBasis(L, disorder, rho, kappa,v,w,X)
+    m = OneDimensionalAubryAndre(L, disorder, rho, kappa,X)
     hr, hz = m.compute_statistics(m.H,num_eigenvalues,sparse,1e-7,False)
     slr, slz = m.compute_statistics(m.SL,2 * num_eigenvalues,sparse,1e-7, False)
     if i % 500 ==0:
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         for i, L in enumerate(L_values):
             L_val_time = time.time()
             print(f"System size L: {L}", flush=True)
-            modelToGetX =  OneDimensionalSSHBlockBasis(L,0,rho,kappa,v,w)
+            modelToGetX =  OneDimensionalAubryAndre(L,0,rho,kappa)
             X = modelToGetX.X
             sparse = True
             num_eig = num_eigenvalues
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     import datetime
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    filename = f"../data/1dSSH_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
+    filename = f"../data/1dAA_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
     np.savez(filename, L_values = L_values, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds)
     print(f"Results saved to {filename}", flush=True)
 

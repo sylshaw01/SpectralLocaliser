@@ -17,7 +17,7 @@ daterange_end_str = '2025-10-30'
 start_date = dt.datetime.strptime(daterange_start_str, '%Y-%m-%d')
 end_date = dt.datetime.strptime(daterange_end_str, '%Y-%m-%d')
 
-file_pattern = os.path.join(datalocation, '1dSSH_L*_rho30.0_kappa0.1_disorder0.1-2.0_*_results.npz')
+file_pattern = os.path.join(datalocation, '1dAA_L*_rho30.0_kappa0.1_disorder0.1-4.0_*_results.npz')
 initial_file_list = sorted(glob.glob(file_pattern))
 
 # --- Filter the list based on the date range ---
@@ -118,7 +118,7 @@ fig.suptitle('Analysis of Hamiltonian and Spectral Localizer Statistics', fontsi
 
 # Generate a safe filename with the current date and time
 now = dt.datetime.now()
-filename = '1dSSH_analysis_' + now.strftime("%Y%m%d_%H%M%S") + '.png'
+filename = '1dAA_analysis_' + now.strftime("%Y%m%d_%H%M%S") + '.png'
 plt.savefig(os.path.join(figure_destination, filename), dpi=400)
 
 print(f"\nPlot saved to: {os.path.join(figure_destination, filename)}")
