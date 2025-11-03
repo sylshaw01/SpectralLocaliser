@@ -16,15 +16,15 @@ sys.path.append('../src')
 from SLmodels import *
 
 def single_iteration(args):
-    L, rho, kappa, disorder, num_eigenvalues, X, sparse, v,w, i = args
+    L, rho, kappa, disorder, num_eigenvalues, X, sparse, reteval, retevec, v,w, i = args
     seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
     np.random.seed(seed)
     m = OneDimensionalSSHBlockBasis(L, disorder, rho, kappa,v,w,X)
-    hr, hz = m.compute_statistics(m.H,num_eigenvalues,sparse,1e-7,False)
-    slr, slz = m.compute_statistics(m.SL,2 * num_eigenvalues,sparse,1e-7, False)
+    hr, hz, hevals = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues,sparse=sparse,tolerance=1e-7,slepc=False, returneVals=reteval, returneVecs=retevec)
+    slr, slz, slevals = m.compute_statistics(m.SL,num_eigenvalues=2 * num_eigenvalues,sparse=sparse,tolerance=1e-7,slepc= False,returneVals=reteval, returneVecs=retevec)
     if i % 500 ==0:
         print(f"            Completed {i} calculations")
-    return hr, hz, slr, slz, seed
+    return hr, hz, slr, slz, hevals, slevals, seed
 
 
 
@@ -55,6 +55,8 @@ if __name__ == "__main__":
     disorder_end = float(parameters.get('disorder_end', 5.0))
     disorder_resolution = int(parameters.get('disorder_resolution', 6))
     num_eigenvalues = int(parameters.get('num_eigenvalues', 600))
+    reteval = True
+    retevec = False
 
     print(f"{cpu_count} Cores found! Using...All of them!!")
     print(f"Parameters loaded from {parameters_file}")
@@ -71,34 +73,37 @@ if __name__ == "__main__":
     total_calculations = len(L_values) * len(disorder_values) * num_disorder_realisations
     print(f"Total calculations to be performed: {total_calculations}")
 
-    hr_results = np.zeros((len(L_values), len(disorder_values), num_disorder_realisations))
-    hz_results = np.zeros((len(L_values), len(disorder_values), num_disorder_realisations))
-    slr_results = np.zeros((len(L_values), len(disorder_values), num_disorder_realisations))
-    slz_results = np.zeros((len(L_values), len(disorder_values), num_disorder_realisations))
-    seeds = np.zeros((len(L_values), len(disorder_values), num_disorder_realisations))
+    hr_results = np.zeros(( len(disorder_values), num_disorder_realisations))
+    hz_results = np.zeros(( len(disorder_values), num_disorder_realisations))
+    hev_results = np.zeros((len(disorder_values), num_disorder_realisations, L_start))
+    slr_results = np.zeros(( len(disorder_values), num_disorder_realisations))
+    slz_results = np.zeros(( len(disorder_values), num_disorder_realisations))
+    slev_results = np.zeros((len(disorder_values),num_disorder_realisations,2 * L_start))
+    seeds = np.zeros(( len(disorder_values), num_disorder_realisations))
     total_time = time.time()
 
 
+
+    L = L_start
     with Pool(processes=cpu_count, maxtasksperchild=10) as pool:
-        for i, L in enumerate(L_values):
-            L_val_time = time.time()
-            print(f"System size L: {L}", flush=True)
-            modelToGetX =  OneDimensionalSSHBlockBasis(L,0,rho,kappa,v,w)
-            X = modelToGetX.X
-            sparse = True
-            num_eig = num_eigenvalues
-            for j, disorder in enumerate(disorder_values):
-                print(f"   Disorder: {disorder}", flush=True)
-                args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse,v,w, i) for i in range(num_disorder_realisations)]
-                results = list(pool.imap(single_iteration, args_list, chunksize=1))
-                print(f"      Time for disorder {disorder}: {time.time() - L_val_time} seconds", flush=True)
-                hr_values, hz_values, slr_values, slz_values, seed_values = zip(*results)
-                hr_results[i, j, :] = hr_values
-                hz_results[i, j, :] = hz_values
-                slr_results[i, j, :] = slr_values
-                slz_results[i, j, :] = slz_values
-                seeds[i, j, :] = seed_values
-            print(f"   Time taken for all disorder values at L={L}: {time.time() - L_val_time} seconds", flush=True)
+        modelToGetX =  OneDimensionalSSHBlockBasis(L,0,rho,kappa,v,w)
+        X = modelToGetX.X
+        sparse = False
+        num_eig = num_eigenvalues
+        for j, disorder in enumerate(disorder_values):
+            print(f"   Disorder: {disorder}", flush=True)
+            disorder_time = time.time()
+            args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse,reteval, retevec, v,w, i) for i in range(num_disorder_realisations)]
+            results = list(pool.imap(single_iteration, args_list, chunksize=1))
+            print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
+            hr_values, hz_values, slr_values, slz_values, hev, slev, seed_values = zip(*results)
+            hr_results[ j, :] = hr_values
+            hz_results[ j, :] = hz_values
+            slr_results[ j, :] = slr_values
+            slz_results[ j, :] = slz_values
+            seeds[ j, :] = seed_values
+            hev_results[j,:] = hev
+            slev_results[j,:] = slev
     print(f"Total time for all calculations: {time.time() - total_time} seconds", flush=True)   
     
 
@@ -106,7 +111,7 @@ if __name__ == "__main__":
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     filename = f"../data/1dSSH_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
-    np.savez(filename, L_values = L_values, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds)
+    np.savez(filename, L_values = L_values, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds, hevals_results = hev_results, slev_results=slev_results)
     print(f"Results saved to {filename}", flush=True)
 
 

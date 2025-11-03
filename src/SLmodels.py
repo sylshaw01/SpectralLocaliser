@@ -88,7 +88,7 @@ class Model(ABC):
         z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0) # vectorised division
         return z.mean()
     
-    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-7, slepc=False):
+    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-7, slepc=False, returneVals=False,returneVecs=False):
         # given an operator, computer the r and z statistics
         #
         # args:
@@ -104,6 +104,8 @@ class Model(ABC):
         else:
             eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
         sorted_eigvals = np.sort(eigvals)
+        ev = sorted_eigvals.copy()
+        vectors = eigvecs.copy()
         #print(f"Found {len(sorted_eigvals)} eigenvalues")
         positive_eigvals = sorted_eigvals[sorted_eigvals > 0] 
         #print(f"Found {len(positive_eigvals)} positive eigenvalues")
@@ -116,7 +118,14 @@ class Model(ABC):
         positive_eigvals = np.array(usable_eigvals)
         r = self.calculate_r(positive_eigvals)
         z = self.calculate_z(positive_eigvals)
-        return r, z
+        if returneVals==False and returneVecs==False:
+            return r, z
+        elif returneVals==True and returneVecs==False:
+            return r, z, ev
+        elif returneVecs ==True and returneVals==False:
+            return r, z, vectors
+        else:
+            return r, z, ev, vectors
     
     
     
