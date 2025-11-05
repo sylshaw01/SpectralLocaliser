@@ -18,9 +18,9 @@ from SLmodels import *
 def single_iteration(args):
     L, rho, kappa, disorder, num_eigenvalues, X, sparse,retevals, retevecs,  i = args
 
-    seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
+    seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i + int(L * 10e2)
     np.random.seed(seed)
-    m = OneDimensionalAnderson(L, disorder, rho, kappa, X)
+    m = ThreeDimensionalAnderson(L, disorder, rho, kappa, X)
     hr, hz , hev = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues, sparse=sparse, tolerance=1e-7, slepc=False, returneVals=retevals,returneVecs=retevecs)
     slr, slz , slev = m.compute_statistics(m.SL,num_eigenvalues = 2 * num_eigenvalues,sparse = sparse, tolerance = 1e-7, slepc = False,  returneVals=retevals, returneVecs=retevecs)
     return hr, hz, slr, slz, hev, slev, seed
@@ -29,9 +29,9 @@ def single_iteration(args):
 
 if __name__ == "__main__":
     cpu_count = int(sys.argv[1]) if len(sys.argv) > 1 else cpu_count()
-    parameters_file = sys.argv[2] if len(sys.argv) > 2 else 'parameters_1dAnderson.txt'
+    parameters_file = sys.argv[2] if len(sys.argv) > 2 else 'parameters_3dAnderson.txt'
     print("-"*50)
-    print("Calculating 1D Anderson model Hamiltonian and spectral localiser statistics")
+    print("Calculating 3D Anderson model Hamiltonian and spectral localiser statistics")
     print("-"*50)
 
 
@@ -52,7 +52,6 @@ if __name__ == "__main__":
     num_eigenvalues = int(parameters.get('num_eigenvalues', 600))
     get_eigvals = True
     get_eigvecs = False
-
 
 
     np.random.seed(int(parameters.get('seed', 99)))
@@ -84,20 +83,24 @@ if __name__ == "__main__":
         L_val_time = time.time()
         print(f"System size L: {L}", flush=True)
         # Instantiate a model just to get X
-        modelToGetX =  OneDimensionalAnderson(L,0,rho,kappa)
+        modelToGetX =  ThreeDimensionalAnderson(L,0,rho,kappa)
         X = modelToGetX.X
         SLsample = modelToGetX.SL
         if get_eigvals:
-            heval_results = np.zeros((len(disorder_values),num_disorder_realizations,L))
+            heval_results = np.zeros((len(disorder_values),num_disorder_realizations,L**3))
             sleval_results = np.zeros((len(disorder_values),num_disorder_realizations,SLsample.shape[0]))
         num_eig = num_eigenvalues
         for j, disorder in enumerate(disorder_values):
             print(f"   Disorder: {disorder}", flush=True)
-            args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse, get_eigvals, get_eigvecs, i) for i in range(num_disorder_realizations)]
+
+            largest_eigenvalue_model = ThreeDimensionalAnderson(L,disorder,rho,kappa)
+            largest_eigenvalue = eigsh(largest_eigenvalue_model.H, k=1, which='LM', return_eigenvectors=False)[0]
+            adaptive_kappa = max(kappa, largest_eigenvalue / rho)
+            args_list  = [(L, rho, adaptive_kappa, disorder, num_eig, X, sparse,get_eigvals, get_eigvecs,  i) for i in range(num_disorder_realizations)]
             disorder_start_time = time.time()
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time taken for disorder {disorder}: {time.time() - disorder_start_time:.2f} seconds", flush=True)
-            hr_values, hz_values, slr_values, slz_values,  hevalues, slevalues,seed_values = zip(*results)
+            hr_values, hz_values, slr_values, slz_values, hevalues, slevalues , seed_values = zip(*results)
             hr_results[ j, :] = hr_values
             hz_results[ j, :] = hz_values
             slr_results[ j, :] = slr_values
@@ -112,7 +115,7 @@ if __name__ == "__main__":
 
     current_date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    filename = f"../data/1dAnderson_L{L}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realizations}_{current_date}_results.npz"
+    filename = f"../data/3dAnderson_L{L}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realizations}_{current_date}_results.npz"
     np.savez(filename, L_values = L, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds, heval_results = heval_results, sleval_results = sleval_results)
     print(f"Results saved to {filename}", flush=True)
 

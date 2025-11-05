@@ -11,8 +11,8 @@ datalocation = '../data/'
 figure_destination = '../figures/'
 
 
-daterange_start_str = '2025-10-25'
-daterange_end_str = '2025-10-30'
+daterange_start_str = '2025-10-30'
+daterange_end_str = '2025-11-30'
 
 start_date = dt.datetime.strptime(daterange_start_str, '%Y-%m-%d')
 end_date = dt.datetime.strptime(daterange_end_str, '%Y-%m-%d')

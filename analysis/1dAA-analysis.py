@@ -11,23 +11,25 @@ datalocation = '../data/'
 figure_destination = '../figures/'
 
 
-daterange_start_str = '2025-10-25'
-daterange_end_str = '2025-10-30'
+daterange_start_str = '20250930'
+daterange_end_str = '20251130'
 
-start_date = dt.datetime.strptime(daterange_start_str, '%Y-%m-%d')
-end_date = dt.datetime.strptime(daterange_end_str, '%Y-%m-%d')
+start_date = dt.datetime.strptime(daterange_start_str, '%Y%m%d')
+end_date = dt.datetime.strptime(daterange_end_str, '%Y%m%d')
 
-file_pattern = os.path.join(datalocation, '1dAA_L*_rho30.0_kappa0.1_disorder0.1-4.0_*_results.npz')
+file_pattern = os.path.join(datalocation, '1dAA_L*_rho30.0_kappa0.1_disorder0.1-3.0_*_results.npz')
 initial_file_list = sorted(glob.glob(file_pattern))
 
 # --- Filter the list based on the date range ---
 filtered_list = []
 for filepath in initial_file_list:
     # FIXED: Updated regex to handle date-time format (YYYY-MM-DD-HHMMSS)
-    match = re.search(r'_(\d{4}-\d{2}-\d{2})-\d{6}_results\.npz$', filepath)
+    match = re.search(r'_(\d{4}\d{2}\d{2})-\d{6}_results\.npz$', filepath)
     if match:
         date_str = match.group(1)  # This extracts just the date part (YYYY-MM-DD)
-        file_date = dt.datetime.strptime(date_str, '%Y-%m-%d')
+        
+        file_date = dt.datetime.strptime(date_str, '%Y%m%d')
+        print(file_date)
         # Check if the file's date is within the desired range
         if start_date <= file_date <= end_date:
             filtered_list.append(filepath)
