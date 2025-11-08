@@ -1,12 +1,12 @@
 #!/bin/bash
 
 
-cat > jobSSH.sh << "EOF"
+cat > jobSSHTopology.sh << "EOF"
 #!/bin/bash
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=84
+#SBATCH --cpus-per-task=168
 #SBATCH --mem-per-cpu=4591
 #SBATCH --time=48:00:00
 
@@ -31,7 +31,7 @@ export OMP_NUM_THREADS=1
 
 
 
-python 1dSSH_combined.py $p "$1"
+python 1dSSH_Topology_combined.py $p "$1"
 EOF
 
 python - <<"EOF"
@@ -43,7 +43,7 @@ with open("../src/SLmodels.py", "r") as f:
     slmodels_code = f.read()
 
 # read 1dSSH
-with open("1dSSH.py", "r") as f:
+with open("1dSSHTopology.py", "r") as f:
     SSH_code = f.read()
 
 SSH_code = re.sub(r"^sys\.path\.append\(['\"]\.\.\/src['\"]\)$", "", SSH_code, flags=re.MULTILINE)
@@ -58,11 +58,11 @@ combined = f"""#!/usr/bin/env python3
 {SSH_code}
 """
 
-with open("1dSSH_combined.py", "w") as f:
+with open("1dSSH_Topology_combined.py", "w") as f:
     f.write(combined)
 EOF
 
-sbatch jobSSH.sh $1
+sbatch jobSSHTopology.sh $1
 
 
 

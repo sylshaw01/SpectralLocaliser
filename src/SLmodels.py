@@ -3,10 +3,8 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import eigsh
 from scipy.linalg import eigh
 from abc import ABC, abstractmethod
-# from petsc4py import PETSc
-# from slepc4py import SLEPc
 
-# Generic base class for models
+
 class Model(ABC):
 
     def __init__(self,L,disorder, rho, kappa, X=None):
@@ -17,7 +15,6 @@ class Model(ABC):
         self.X = X if X is not None else self.create_position_operator() 
         self.H = self.create_hamiltonian()
         self.SL = self.create_localiser()
-    
     
     @abstractmethod
     def create_hamiltonian(self):
@@ -46,184 +43,47 @@ class Model(ABC):
         #  eigvecs: array of eigenvectors
 
         if num_eigenvalues is None:
-            num_eigenvalues = operator.shape[0] // 5
+            num_eigenvalues = self.L // 5
         
         if sparse == False or num_eigenvalues == self.L:
             eigvals, eigvecs = eigh(operator.toarray())
         else:
-            eigvals, eigvecs = eigsh(operator, k=num_eigenvalues,sigma = 1.234e-4, which='LM')
+            eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues, which='SM')
 
         return eigvals, eigvecs
     
     def calculate_r(self, eigvals):
-        # finds the r value from a list of eigenvalues
-        #
-        # args:
-        #  eigvals: array of eigenvalues
-        #
-        # returns:
-        # r: the mean adjacent gap ratio
         # Once eigenvalues are found, calculate the r value
-        eigvals_s = np.diff(eigvals) # calculates eigvals[i+1]-eigvals[i] for all i
-        min_vals = np.minimum(eigvals_s[:-1],eigvals_s[1:]) # min(s_i,s_(i+1))
-        max_vals = np.maximum(eigvals_s[:-1],eigvals_s[1:]) # max(s_i,s_(i+1))
-        r = np.divide(min_vals,max_vals,out=np.zeros_like(min_vals, dtype=float),where=max_vals!=0) # vectorised division
+        eigvals_s = np.diff(eigvals)
+        min_vals = np.minimum(eigvals_s[:-1],eigvals_s[1:])
+        max_vals = np.maximum(eigvals_s[:-1],eigvals_s[1:])
+        r = np.divide(min_vals,max_vals,out=np.zeros_like(min_vals, dtype=float),where=max_vals!=0)
         return r.mean()
     
     def calculate_z(self, eigvals):
-        s = np.diff(eigvals) # calculates eigvals[i+1]-eigvals[i] for all i
-        s_i_minus_2 = s[:-4] # s from 0 to len(s)-4
-        s_i_minus_1 = s[1:-3] # s from 1 to len(s)-3
-        s_i         = s[2:-2] # s from 2 to len(s)-2
-        s_i_plus_1  = s[3:-1] # s from 3 to len(s)-1
-        # naming of minus and plus is because these are all arrays of length len(s)-4, but shifted slightly relative to s_i
+        s = np.diff(eigvals)
+        s_i_minus_2 = s[:-4]
+        s_i_minus_1 = s[1:-3]
+        s_i         = s[2:-2]
+        s_i_plus_1  = s[3:-1]
 
-        nn      = np.minimum(s_i, s_i_minus_1) # the nearest neighbour is the minimum of s_i and s_(i-1)
-        n_other = np.maximum(s_i, s_i_minus_1) # the other nearest neighbour is the maximum of s_i and s_(i-1)
-        nnn_left  = s_i_minus_1 + s_i_minus_2 # next nearest neighbour to the left
-        nnn_right = s_i + s_i_plus_1 # next nearest neighbour to the right
+        nn      = np.minimum(s_i, s_i_minus_1)
+        n_other = np.maximum(s_i, s_i_minus_1)
+        nnn_left  = s_i_minus_1 + s_i_minus_2
+        nnn_right = s_i + s_i_plus_1
         
-        nnn = np.minimum.reduce([n_other, nnn_left, nnn_right]) # the next nearest neighbour is the minimum of the three possible candidates
+        nnn = np.minimum.reduce([n_other, nnn_left, nnn_right])
 
-        z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0) # vectorised division
+        z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0)
         return z.mean()
     
-    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-7, slepc=False, returneVals=False,returneVecs=False):
-        # given an operator, computer the r and z statistics
-        #
-        # args:
-        #  operator: the operator (typically a scipy sparse matrix) to find eigenvalues of.
-        #  num_eigenvalues: the number of eigenvalues to search for. Only applies when using sparse solver.
-        #  sparse: Boolean to explicitly use sparse solver or not
-        #
-        # returns:
-        #  r: the mean adjacent gap ratio
-        #  z: the mean next nearest neighbour ratio
-        if slepc:
-            eigvals, eigvecs = self.find_eigvals_slepc(operator,num_eigenvalues)
-        else:
-            eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
-        sorted_eigvals = np.sort(eigvals)
-        ev = sorted_eigvals.copy()
-        vectors = eigvecs.copy()
-        #print(f"Found {len(sorted_eigvals)} eigenvalues")
-        positive_eigvals = sorted_eigvals[sorted_eigvals > 0] 
-        #print(f"Found {len(positive_eigvals)} positive eigenvalues")
-        usable_eigvals  = [positive_eigvals[0]] if len(positive_eigvals) > 0 else []
-        
-        for val in positive_eigvals[1:]:
-            if val - usable_eigvals[-1] > tolerance:
-                usable_eigvals.append(val)
-        #print(f"After applying tolerance of {tolerance}, count is {len(usable_eigvals)}")
-        positive_eigvals = np.array(usable_eigvals)
+    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True):
+        eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
+        positive_eigvals = eigvals[eigvals > 0]
         r = self.calculate_r(positive_eigvals)
         z = self.calculate_z(positive_eigvals)
-        if returneVals==False and returneVecs==False:
-            return r, z
-        elif returneVals==True and returneVecs==False:
-            return r, z, ev
-        elif returneVecs ==True and returneVals==False:
-            return r, z, vectors
-        else:
-            return r, z, ev, vectors
+        return r, z
     
-    
-    
-    # def find_eigvals_slepc(self, operator, num_eigenvalues=None):
-    #     """
-    #     Finds eigenvalues and eigenvectors using SLEPc's Jacobi-Davidson solver.
-    #     ...
-    #     """
-    #     if num_eigenvalues is None:
-    #         num_eigenvalues = operator.shape[0] // 5
-
-    #     # 1. Convert the SciPy sparse matrix to a PETSc Mat
-    #     petsc_op = PETSc.Mat().createAIJ(
-    #         size=operator.shape,
-    #         csr=(operator.indptr, operator.indices, operator.data)
-    #     )
-
-    #     # 2. Create the Eigenvalue Problem Solver (EPS)
-    #     Eps = SLEPc.EPS().create(comm=PETSc.COMM_WORLD)
-    #     Eps.setOperators(petsc_op)
-    #     Eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
-
-    #     # 3. Set the solver type to Jacobi-Davidson (JD)
-    #     Eps.setType(SLEPc.EPS.Type.JD)
-
-    #     # --- THE FIX: SET OPTIONS FOR THE INTERNAL SOLVER ---
-    #     # Get the global PETSc options object
-    #     opts = PETSc.Options()
-    #     # Set the KSP and PC types using the correct SLEPc prefix for JD
-    #     opts.setValue('eps_jd_ksp_type', 'gmres')
-    #     opts.setValue('eps_jd_pc_type', 'ilu')
-    #     # ---------------------------------------------------
-
-    #     # 5. Configure the eigenvalue search
-    #     Eps.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_MAGNITUDE)
-    #     Eps.setTarget(1.234e-4)
-    #     Eps.setDimensions(nev=num_eigenvalues)
-
-    #     # This call now reads the options we just set programmatically
-    #     Eps.setFromOptions()
-
-    #     # 6. Solve the problem
-    #     Eps.solve()
-
-    #     # 7. Retrieve and format the results (this part is unchanged)
-    #     nconv = Eps.getConverged()
-    #     eigvals = []
-    #     eigvecs_list = []
-    #     if nconv > 0:
-    #         vr, vi = petsc_op.createVecs()
-    #         for i in range(nconv):
-    #             k = Eps.getEigenpair(i, vr, vi)
-    #             eigvals.append(k.real)
-    #             eigvecs_list.append(vr.getArray().copy())
-
-    #     eigvals = np.array(eigvals)
-    #     if not eigvecs_list:
-    #         eigvecs = np.array([]).reshape(operator.shape[0], 0)
-    #     else:
-    #         eigvecs = np.array(eigvecs_list).T
-
-    #     sort_indices = np.argsort(eigvals)
-    #     eigvals = eigvals[sort_indices]
-    #     eigvecs = eigvecs[:, sort_indices]
-
-    #     return eigvals, eigvecs
-    
-
-class OneDimensionalAubryAndre(Model):
-
-    def create_hamiltonian(self):
-        L = self.L
-        disorder = self.disorder
-
-        # on diagonal disorder
-        diag = disorder * np.cos(2 * np.pi * np.arange(L) / (L / 1.61803398875))  # using golden ratio for incommensurability
-        # off diagonal hopping terms
-        off_diag = np.ones(L-1)
-
-        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='csr')
-
-        return H
-    
-    def create_position_operator(self):
-
-        row_vector = np.linspace(-self.rho,self.rho,self.L)
-        X = sp.diags(row_vector,0,shape=(self.L,self.L),format='csr')
-        return X
-
-    def create_localiser(self):
-        kappa = self.kappa
-        X = self.X
-        H = self.H
-
-        localiser = sp.bmat([[-H, kappa * X], [kappa * X, H]], format='csr')
-        #localiser = sp.csr_matrix(localiser)
-
-        return localiser
 
 
 class OneDimensionalAnderson(Model):
@@ -237,7 +97,7 @@ class OneDimensionalAnderson(Model):
         # off diagonal hopping terms
         off_diag = np.ones(L-1)
 
-        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='csr')
+        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='lil')
 
         return H
     
@@ -259,9 +119,11 @@ class OneDimensionalAnderson(Model):
     
 class OneDimensionalSSH(Model):
 
-    def __init__(self,L,disorder,rho,kappa,v,w,X=None):
+    def __init__(self,L,disorder,rho,kappa,v,w,X=None, diagdisorder=0):
         self.v = v # intracell hopping strength
         self.w = w # intercell hopping strength
+        self.topprop = 0
+        self.diagdisorder = diagdisorder # if this is > 0 then diagonal disorder will be applied
         super().__init__(L,disorder,rho,kappa,X)
     
     @abstractmethod
@@ -372,9 +234,15 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
         intracell_hopping = self.v * np.ones(self.L//2) # intracell hopping
         intercell_hopping = self.w * np.ones(self.L//2 - 1) # intercell hopping
 
+
         intracell_hopping_disordered = intracell_hopping + (np.random.rand(self.L//2)-0.5) * disorder
         intercell_hopping_disordered = intercell_hopping + (np.random.rand(self.L//2 - 1)-0.5) * disorder
 
+        amttopological = 0
+        for i in range(1,(self.L//2)-1):
+            if intercell_hopping_disordered[i] > intracell_hopping_disordered[i-1]:
+                amttopological += 1
+        self.topprop = amttopological/(self.L)
 
         off_diag = np.zeros(self.L-1)
         off_diag[0::2] = intracell_hopping_disordered # intracell hopping
@@ -385,6 +253,8 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
         #diagonal_disorder = np.zeros(self.L)
         #diagonal_disorder[0::2] = chiral_disorder
         #diagonal_disorder[1::2] = -chiral_disorder
+
+
 
 
         H = sp.diags([off_diag,off_diag],[-1,1],shape=(self.L,self.L),format='csr')
@@ -399,7 +269,7 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
         X = sp.diags(all_positions,0,shape=(self.L,self.L),format='csr')
         return X
     
-    def create_symmetry_reduced_localiser(self):
+    def create_symmetry_reduced_localiser(self, x0=0, E0=0):
         kappa = self.kappa
         X = self.X
         H = self.H
@@ -416,8 +286,13 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
 
 class TwoDimensionalMagneticAnderson(Model):
 
-    def __init__(self,L,disorder, rho, kappa,flux=1,X=None):
-        pass
+    def __init__(self,L,disorder, rho, kappa,flux=1, X=None, Y=None):
+        self.L = L
+        self.disorder = disorder
+        self.rho = rho
+        self.kappa = kappa
+        self.flux = flux
+        #self.X = 
 
     def create_hamiltonian(self):
         pass
@@ -433,102 +308,24 @@ class TwoDimensionalMagneticAnderson(Model):
     def create_localiser(self):
         pass
 
-
-class TwoDimensionalLiebModel(Model):
-    pass
-
 class ThreeDimensionalAnderson(Model):
-
-
-    def __init__(self, L, disorder, rho, kappa, X=None):
-        # Initialize all attributes directly without calling parent __init__
-        self.L = L
-        self.disorder = disorder
-        self.rho = rho
-        self.kappa = kappa
-        
-        # Create position operators (list of 3) and other operators
-        self.X = X if X is not None else self.create_position_operator()
-        self.H = self.create_hamiltonian()
-        self.SL = self.create_localiser()
-
     def create_hamiltonian(self):
-        N = self.L**3
-        L = self.L
-
-
-
-        # L = 3 example
-        
-
-        # (w, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0 ...)
-        # (1, w, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, ....)
-        # (0, 1, w, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, ....)
-
-        # on diagonal disorder term
-        on_diag = (np.random.rand(N) - 0.5) * self.disorder
-
-        # Create off-diagonals for hopping terms
-        # Hopping in x-direction
-        # make a fully one off-diagonal
-        off_diag_x = np.ones(N - 1)
-        # then set to zero all of the elements at the far x edge
-        off_diag_x[L-1::L] = 0 
-
-        # np.arange gets [0,1,2,..,N-L-1]
-        # then % (L*L) gets the position in the current yz plane
-        # then // L gets the y coordinate
-        # so mask_y is true for all elements at the far y edge
-        y_coords = (np.arange(N-L) % (L*L)) // L
-        mask_y = (y_coords == L-1)
-        # Hopping in y-direction
-        off_diag_y = np.ones(N - L)
-        off_diag_y[mask_y] = 0 
-        # z is easy because we don't have to worry about edges
-        off_diag_z = np.ones(N - L*L)
-
-        H = sp.diags(
-            [
-                on_diag,
-                off_diag_x, off_diag_x,
-                off_diag_y, off_diag_y,
-                off_diag_z, off_diag_z
-            ],
-            [
-                0,
-                -1, 1,
-                -L, L,
-                -L*L, L*L
-            ],
-            shape=(N, N),
-            format='csr'
-        )
-        
-        return H
+        pass
 
     def create_position_operator(self):
         xvals = np.linspace(-self.rho,self.rho,self.L)
         xdiag = np.tile(xvals, self.L**2) # for example if I had 3 sites with my system going between 0 and 2, my xdiag is 
                                         #               [0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0,1,2]
         ydiag= np.tile(np.repeat(xvals,self.L),self.L) # my ydiag is then [0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2]
-        zdiag = np.repeat(xvals,self.L*self.L) # and my zdiag = [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2]
+        zdiag = np.tile(xvals,self.L*self.L) # and my zdiag = [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2]
 
-        X = sp.diags(xdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
-        Y = sp.diags(ydiag, 0, shape=(self.L**3,self.L**3),format = "csr")
-        Z = sp.diags(zdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
-
-        return [X,Y,Z]
-        
+        X = sp.spdiags(xdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+        Y = sp.spdiags(ydiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+        Z = sp.spdiags(zdiag, 0, shape=(self.L**3,self.L**3),format = "csr")
+        pass
 
     def create_localiser(self):
-        pauli_x = sp.csr_matrix(np.array([[0,1],[1,0]]))
-        pauli_y = sp.csr_matrix(np.array([[0,-1j],[1j,0]]))
-        pauli_z = sp.csr_matrix(np.array([[1,0],[0,-1]]))
-        identity_2 = sp.eye(2,format='csr')
-        block1 = sp.kron(pauli_x, self.kappa * self.X[0], format='csr') + sp.kron(pauli_y, self.kappa * self.X[1], format='csr') + sp.kron(pauli_z,self.kappa * self.X[2], format='csr')
-        block2 = sp.kron(identity_2, self.H, format='csr')
-        localiser = sp.bmat([[-block2, block1],[block1, block2]], format='csr')
-        return localiser
+        pass
 
 class ThreeDimensionalTopologicalChiralInsulator(Model):
     def create_hamiltonian(self):
