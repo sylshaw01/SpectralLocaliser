@@ -247,6 +247,7 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
         off_diag = np.zeros(self.L-1)
         off_diag[0::2] = intracell_hopping_disordered # intracell hopping
         off_diag[1::2] = intercell_hopping_disordered # intercell hopping
+        on_diag = (np.random.rand(self.L)-0.5) * self.diagdisorder
 
         #chiral_disorder = (np.random.rand(self.L//2)-0.5) * self.disorder
 
@@ -257,7 +258,7 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
 
 
 
-        H = sp.diags([off_diag,off_diag],[-1,1],shape=(self.L,self.L),format='csr')
+        H = sp.diags([off_diag,on_diag, off_diag],[-1,0, 1],shape=(self.L,self.L),format='csr')
 
         return H
 

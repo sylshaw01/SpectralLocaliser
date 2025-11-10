@@ -22,10 +22,13 @@ def single_iteration(args):
     m = OneDimensionalSSHAlternatingBasis(L, disorder, rho, kappa,v,w,X, diagdisorder=ddisorder)
     windingnumber = m.calculate_winding_number()
     topprop = m.topprop
+    evals, evecs = m.find_eigenvalues(m.H,600,False )
+    r = m.calculate_r(evals)
+    z = m.calculate_z(evals)
     
     if i % 500 ==0:
         print(f"            Completed {i} calculations")
-    return windingnumber, topprop,  seed
+    return windingnumber, topprop,  seed, r, z, evals
 
 
 
@@ -82,6 +85,9 @@ if __name__ == "__main__":
     windingnumberresults = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
     toppropresults = np.zeros((len(diag_disorder_values),len(disorder_values), 200,num_disorder_realisations))
     seeds = np.zeros((len(diag_disorder_values), len(disorder_values),200, num_disorder_realisations))
+    r_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
+    z_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
+    evals_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations, L_start))
     total_time = time.time()
 
 
@@ -101,9 +107,12 @@ if __name__ == "__main__":
                     args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse,reteval, retevec, v,w,diag_disorder, i) for i in range(num_disorder_realisations)]
                     results = list(pool.imap(single_iteration, args_list, chunksize=1))
                     print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
-                    windingnumber, topprop,  seed_values = zip(*results)
+                    windingnumber, topprop,  seed_values, r_val, z_val, evals = zip(*results)
                     windingnumberresults[k, j,l, :] = windingnumber
                     toppropresults[k,j,l,:] = topprop
+                    r_values[k,j,l,:] = r_val
+                    z_values[k,j,l,:] = z_val
+                    evals_values[k,j,l,:,:] = evals
             
                     seeds[ k, j, l,:] = seed_values
     print(f"Total time for all calculations: {time.time() - total_time} seconds", flush=True)   
@@ -113,7 +122,7 @@ if __name__ == "__main__":
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     filename = f"../data/1dSSH_TOPOLOGY_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
-    np.savez(filename, L_values = L_values, disorder_values = disorder_values, diag_disorder_values=diag_disorder_values, topprop=topprop, windingnumberresults=windingnumberresults, seeds = seeds)
+    np.savez(filename, L_values = L_values, disorder_values = disorder_values, diag_disorder_values=diag_disorder_values, topprop=toppropresults, windingnumberresults=windingnumberresults, seeds = seeds, r_values = r_values, z_values = z_values, evals_values = evals_values)
     print(f"Results saved to {filename}", flush=True)
 
 
