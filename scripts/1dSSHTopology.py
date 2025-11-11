@@ -22,11 +22,11 @@ def single_iteration(args):
     m = OneDimensionalSSHAlternatingBasis(L, disorder, rho, kappa,v,w,X, diagdisorder=ddisorder)
     topprop = m.topprop
     
-    rh, zh,rsl, zsl, rsrl, zsrl,  evals, slevals, slevalssrl = m.calculate_everything(0,0,num_eigenvalues,sparse)
+    rh, zh,rsl, zsl,  evals, slevals, slevalssrl = m.calculate_everything(0,0,num_eigenvalues,sparse)
     
     if i % 500 ==0:
         print(f"            Completed {i} calculations")
-    return rh, zh, topprop, seed, rsrl, zsrl, evals, slevals, slevalssrl, seed
+    return rh, zh, topprop, seed, rsl, zsl, evals, slevals, slevalssrl, seed
 
 
 
@@ -108,12 +108,12 @@ if __name__ == "__main__":
                     args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse,reteval, retevec, v,w,diag_disorder, i) for i in range(num_disorder_realisations)]
                     results = list(pool.imap(single_iteration, args_list, chunksize=1))
                     print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
-                    rh, zh, topprop, seed, rsrl, zsrl, evals, slevals, slevalssrl, seed_values = zip(*results)
+                    rh, zh, topprop, seed, rsl, zsl, evals, slevals, slevalssrl, seed_values = zip(*results)
                     rh_values[k,j,l,:] = rh
                     zh_values[k,j,l,:] = zh
                     toppropresults[k,j,l,:] = topprop
-                    rsl_values[k,j,l,:] = rsrl
-                    zsl_values[k,j,l,:] = zsrl
+                    rsl_values[k,j,l,:] = rsl
+                    zsl_values[k,j,l,:] = zsl
                     evals_values[k,j,l,:,:] = evals
                     slevals_values[k,j,l,:,:] = slevals
                     slevals_srl_values[k,j,l,:,:] = slevalssrl

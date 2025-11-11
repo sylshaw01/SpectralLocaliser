@@ -275,9 +275,8 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
         slevals, d = self.find_eigenvalues(self.create_localiser(), num_eigenvalues, sparse)
         rh, zh = self.compute_statistics(self.H,num_eigenvalues,sparse)
         rsl, zsl = self.compute_statistics(self.SL,num_eigenvalues,sparse)
-        rsrl, zsrl = self.compute_statistics(self.create_symmetry_reduced_localiser(x0,E0),num_eigenvalues,sparse)
         
-        return  rh, zh,rsl, zsl, rsrl, zsrl,  evals, slevals, slevalssrl
+        return  rh, zh,rsl, zsl,  evals, slevals, slevalssrl
 
     
 
