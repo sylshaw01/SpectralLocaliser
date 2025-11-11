@@ -17,7 +17,7 @@ daterange_end_str = '20251130'
 start_date = dt.datetime.strptime(daterange_start_str, '%Y%m%d')
 end_date = dt.datetime.strptime(daterange_end_str, '%Y%m%d')
 
-file_pattern = os.path.join(datalocation, '1dAA_L*_rho30.0_kappa0.1_disorder0.1-3.0_*_results.npz')
+file_pattern = os.path.join(datalocation, '1dAA_L*_rho30.0_kappa0.1_disorder0.1-4.0_*_results.npz')
 initial_file_list = sorted(glob.glob(file_pattern))
 
 # --- Filter the list based on the date range ---

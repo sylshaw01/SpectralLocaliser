@@ -110,7 +110,7 @@ if __name__ == "__main__":
     import datetime
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    filename = f"../data/1dSSH_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
+    filename = f"../data/1dSSH_L{L_start}-{L_end}_w_{w}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
     np.savez(filename, L_values = L_values, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds, hevals_results = hev_results, slev_results=slev_results)
     print(f"Results saved to {filename}", flush=True)
 
