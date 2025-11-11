@@ -17,18 +17,16 @@ from SLmodels import *
 
 def single_iteration(args):
     L, rho, kappa, disorder, num_eigenvalues, X, sparse, reteval, retevec, v,w,ddisorder,  i = args
-    seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
+    seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i + int(10e3 * ddisorder)
     np.random.seed(seed)
     m = OneDimensionalSSHAlternatingBasis(L, disorder, rho, kappa,v,w,X, diagdisorder=ddisorder)
-    windingnumber = m.calculate_winding_number()
     topprop = m.topprop
-    evals, evecs = m.find_eigenvalues(m.H,600,False )
-    r = m.calculate_r(evals)
-    z = m.calculate_z(evals)
+    
+    rh, zh,rsl, zsl, rsrl, zsrl,  evals, slevals, slevalssrl = m.calculate_everything(0,0,num_eigenvalues,sparse)
     
     if i % 500 ==0:
         print(f"            Completed {i} calculations")
-    return windingnumber, topprop,  seed, r, z, evals
+    return rh, zh, topprop, seed, rsrl, zsrl, evals, slevals, slevalssrl, seed
 
 
 
@@ -82,12 +80,15 @@ if __name__ == "__main__":
     print(f"Total calculations to be performed: {total_calculations}")
 
 
-    windingnumberresults = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
     toppropresults = np.zeros((len(diag_disorder_values),len(disorder_values), 200,num_disorder_realisations))
     seeds = np.zeros((len(diag_disorder_values), len(disorder_values),200, num_disorder_realisations))
-    r_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
-    z_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
+    rh_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
+    zh_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
     evals_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations, L_start))
+    rsl_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
+    zsl_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
+    slevals_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations, L_start * 2))
+    slevals_srl_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations, L_start))
     total_time = time.time()
 
 
@@ -107,12 +108,16 @@ if __name__ == "__main__":
                     args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse,reteval, retevec, v,w,diag_disorder, i) for i in range(num_disorder_realisations)]
                     results = list(pool.imap(single_iteration, args_list, chunksize=1))
                     print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
-                    windingnumber, topprop,  seed_values, r_val, z_val, evals = zip(*results)
-                    windingnumberresults[k, j,l, :] = windingnumber
+                    rh, zh, topprop, seed, rsrl, zsrl, evals, slevals, slevalssrl, seed_values = zip(*results)
+                    rh_values[k,j,l,:] = rh
+                    zh_values[k,j,l,:] = zh
                     toppropresults[k,j,l,:] = topprop
-                    r_values[k,j,l,:] = r_val
-                    z_values[k,j,l,:] = z_val
+                    rsl_values[k,j,l,:] = rsrl
+                    zsl_values[k,j,l,:] = zsrl
                     evals_values[k,j,l,:,:] = evals
+                    slevals_values[k,j,l,:,:] = slevals
+                    slevals_srl_values[k,j,l,:,:] = slevalssrl
+
             
                     seeds[ k, j, l,:] = seed_values
     print(f"Total time for all calculations: {time.time() - total_time} seconds", flush=True)   
@@ -122,7 +127,7 @@ if __name__ == "__main__":
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     filename = f"../data/1dSSH_TOPOLOGY_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
-    np.savez(filename, L_values = L_values, disorder_values = disorder_values, diag_disorder_values=diag_disorder_values, topprop=toppropresults, windingnumberresults=windingnumberresults, seeds = seeds, r_values = r_values, z_values = z_values, evals_values = evals_values)
+    np.savez(filename, L_values = L_values, disorder_values = disorder_values, diag_disorder_values=diag_disorder_values, topprop=toppropresults, windingnumberresults=windingnumberresults, seeds = seeds, r_values = r_values, z_values = z_values, evals_values = evals_values, slevals_values = slevals_values)
     print(f"Results saved to {filename}", flush=True)
 
 
