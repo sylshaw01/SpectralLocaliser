@@ -46,10 +46,11 @@ class Model(ABC):
             num_eigenvalues = self.L // 5
         
         if sparse == False or num_eigenvalues == self.L:
-            if np.any(np.iscomplex(operator.toarray())):
-                eigvals, eigvecs = np.linalg.eig(operator.toarray())
+            operator_dense = operator.toarray()
+            if not np.allclose(operator_dense, operator_dense.conj().T):
+                eigvals, eigvecs = np.linalg.eig(operator_dense)
             else:
-                eigvals, eigvecs = eigh(operator.toarray())
+                eigvals, eigvecs = eigh(operator_dense)
         else:
             eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues, which='SM')
 
