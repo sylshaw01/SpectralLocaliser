@@ -80,12 +80,44 @@ class Model(ABC):
         z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0)
         return z.mean()
     
-    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True):
-        eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
-        positive_eigvals = eigvals[eigvals > 0]
+    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-7, slepc=False, returneVals=False,returneVecs=False):
+        # given an operator, computer the r and z statistics
+        #
+        # args:
+        #  operator: the operator (typically a scipy sparse matrix) to find eigenvalues of.
+        #  num_eigenvalues: the number of eigenvalues to search for. Only applies when using sparse solver.
+        #  sparse: Boolean to explicitly use sparse solver or not
+        #
+        # returns:
+        #  r: the mean adjacent gap ratio
+        #  z: the mean next nearest neighbour ratio
+        if slepc:
+            eigvals, eigvecs = self.find_eigvals_slepc(operator,num_eigenvalues)
+        else:
+            eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
+        sorted_eigvals = np.sort(eigvals)
+        ev = sorted_eigvals.copy()
+        vectors = eigvecs.copy()
+        #print(f"Found {len(sorted_eigvals)} eigenvalues")
+        positive_eigvals = sorted_eigvals[sorted_eigvals > 0] 
+        #print(f"Found {len(positive_eigvals)} positive eigenvalues")
+        usable_eigvals  = [positive_eigvals[0]] if len(positive_eigvals) > 0 else []
+        
+        for val in positive_eigvals[1:]:
+            if val - usable_eigvals[-1] > tolerance:
+                usable_eigvals.append(val)
+        #print(f"After applying tolerance of {tolerance}, count is {len(usable_eigvals)}")
+        positive_eigvals = np.array(usable_eigvals)
         r = self.calculate_r(positive_eigvals)
         z = self.calculate_z(positive_eigvals)
-        return r, z
+        if returneVals==False and returneVecs==False:
+            return r, z
+        elif returneVals==True and returneVecs==False:
+            return r, z, ev
+        elif returneVecs ==True and returneVals==False:
+            return r, z, vectors
+        else:
+            return r, z, ev, vectors
     
 
 
@@ -270,11 +302,9 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
         return local_winding_number
     
     def calculate_everything(self, x0=0, E0=0, num_eigenvalues=None, sparse=False):
-        evals , b = self.find_eigenvalues(self.H, num_eigenvalues, sparse)
         slevalssrl, c = self.find_eigenvalues(self.create_symmetry_reduced_localiser(0,0), num_eigenvalues, sparse)
-        slevals, d = self.find_eigenvalues(self.create_localiser(), num_eigenvalues, sparse)
-        rh, zh = self.compute_statistics(self.H,num_eigenvalues,sparse)
-        rsl, zsl = self.compute_statistics(self.SL,num_eigenvalues,sparse)
+        rh, zh, evals = self.compute_statistics(self.H,num_eigenvalues,sparse, tolerance=1e-7, slepc=False, returneVals=True, returneVecs=False)
+        rsl, zsl, slevals = self.compute_statistics(self.SL,num_eigenvalues,sparse, tolerance=1e-7, slepc=False, returneVals=True, returneVecs=False)
         
         return  rh, zh,rsl, zsl,  evals, slevals, slevalssrl
 

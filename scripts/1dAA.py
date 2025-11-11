@@ -21,8 +21,8 @@ def single_iteration(args):
     seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
     np.random.seed(seed)
     m = OneDimensionalAubryAndre(L, disorder, rho, kappa, X)
-    hr, hz , hev = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues, sparse=sparse)
-    slr, slz , slev = m.compute_statistics(m.SL,num_eigenvalues = 2 * num_eigenvalues,sparse = sparse)
+    hr, hz , hev = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues, sparse=sparse, tolerance=1e-7, slepc=False, returneVals=retevals,returneVecs=retevecs)
+    slr, slz , slev = m.compute_statistics(m.SL,num_eigenvalues = 2 * num_eigenvalues,sparse = sparse, tolerance = 1e-7, slepc = False,  returneVals=retevals, returneVecs=retevecs)
     if i % 500 ==0:
         print(f"            Completed {i} calculations")
     return hr, hz, slr, slz, hev, slev, seed
