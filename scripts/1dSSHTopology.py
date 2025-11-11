@@ -80,15 +80,15 @@ if __name__ == "__main__":
     print(f"Total calculations to be performed: {total_calculations}")
 
 
-    toppropresults = np.zeros((len(diag_disorder_values),len(disorder_values), 200,num_disorder_realisations))
-    seeds = np.zeros((len(diag_disorder_values), len(disorder_values),200, num_disorder_realisations))
-    rh_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
-    zh_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
-    evals_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations, L_start))
-    rsl_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
-    zsl_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations))
-    slevals_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations, L_start * 2))
-    slevals_srl_values = np.zeros((len(diag_disorder_values),len(disorder_values),200, num_disorder_realisations, L_start))
+    toppropresults = np.zeros((len(diag_disorder_values),len(disorder_values), 100,num_disorder_realisations))
+    seeds = np.zeros((len(diag_disorder_values), len(disorder_values),100, num_disorder_realisations))
+    rh_values = np.zeros((len(diag_disorder_values),len(disorder_values),100, num_disorder_realisations))
+    zh_values = np.zeros((len(diag_disorder_values),len(disorder_values),100, num_disorder_realisations))
+    evals_values = np.zeros((len(diag_disorder_values),len(disorder_values),100, num_disorder_realisations, L_start))
+    rsl_values = np.zeros((len(diag_disorder_values),len(disorder_values),100, num_disorder_realisations))
+    zsl_values = np.zeros((len(diag_disorder_values),len(disorder_values),100, num_disorder_realisations))
+    slevals_values = np.zeros((len(diag_disorder_values),len(disorder_values),100, num_disorder_realisations, L_start * 2))
+    slevals_srl_values = np.zeros((len(diag_disorder_values),len(disorder_values),100, num_disorder_realisations, L_start))
     total_time = time.time()
 
 
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         for k, diag_disorder in enumerate(diag_disorder_values):
             print(" Diag disorder: {diag_disorder}", flush=True)
             for j, disorder in enumerate(disorder_values):
-                for l, w in enumerate(np.linspace(0,2,200)):
+                for l, w in enumerate(np.linspace(0,2,100)):
                     print(f"   Disorder: {disorder}", flush=True)
                     disorder_time = time.time()
                     args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse,reteval, retevec, v,w,diag_disorder, i) for i in range(num_disorder_realisations)]
