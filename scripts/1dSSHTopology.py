@@ -127,7 +127,19 @@ if __name__ == "__main__":
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     filename = f"../data/1dSSH_TOPOLOGY_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
-    np.savez(filename, L_values = L_values, disorder_values = disorder_values, diag_disorder_values=diag_disorder_values, topprop=toppropresults, windingnumberresults=windingnumberresults, seeds = seeds, r_values = r_values, z_values = z_values, evals_values = evals_values, slevals_values = slevals_values)
+    np.savez(filename, L_values = L_values, 
+             disorder_values = disorder_values,
+            diag_disorder_values=diag_disorder_values,
+            topprop=toppropresults,
+            seeds = seeds, 
+            evals_values = evals_values,
+            slevals_values = slevals_values,
+            rh_values = rh_values,
+            zh_values = zh_values,
+            rsl_values = rsl_values,
+            zsl_values = zsl_values,
+            slevals_srl_values = slevals_srl_values,
+            )
     print(f"Results saved to {filename}", flush=True)
 
 
