@@ -15,6 +15,10 @@ class Model(ABC):
         self.X = X if X is not None else self.create_position_operator() 
         self.H = self.create_hamiltonian()
         self.SL = self.create_localiser()
+        self.eigvecs_H = None
+        self.eigvecs_SL = None
+        self.eigvals_H = None
+        self.eigvals_SL = None
     
     @abstractmethod
     def create_hamiltonian(self):
@@ -49,12 +53,20 @@ class Model(ABC):
             operator_dense = operator.toarray()
             if not np.allclose(operator_dense, operator_dense.conj().T):
                 eigvals, eigvecs = np.linalg.eig(operator_dense)
+                idx = np.argsort(eigvals)
+                eigvals = eigvals[idx]
+                eigvecs = eigvecs[:, idx]
             else:
                 eigvals, eigvecs = eigh(operator_dense)
         else:
             eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues, which='SM')
 
-        return eigvals, eigvecs
+        if operator is self.H:
+            self.eigvals_H = eigvals
+            self.eigvecs_H = eigvecs
+        elif operator is self.SL:
+            self.eigvals_SL = eigvals
+            self.eigvecs_SL = eigvecs
     
     def calculate_r(self, eigvals):
         # Once eigenvalues are found, calculate the r value
@@ -119,6 +131,12 @@ class Model(ABC):
             return r, z, vectors
         else:
             return r, z, ev, vectors
+        
+    def compute_IPR(self, eigvecs):
+        # computes the inverse participation ratio for a set of eigenvectors
+        # IPR(psi) = sum_i |psi_i|^4 
+        IPRs = np.sum(np.abs(eigvecs)**4, axis=0)
+        return IPRs
     
 
 
@@ -212,6 +230,7 @@ class OneDimensionalSSHBlockBasis(OneDimensionalSSH):
         #       [ A  0  ]
         # where A = m + S 
         # Then H = H_0 + disorder
+        # Fix this! it isn't accurate becasue of a misunderstanding I had, only use the alternate basis for now
         L = self.L
         intracell_hopping = self.v * np.ones(L//2)
         intercell_hopping = self.w * np.ones(L//2 - 1)
