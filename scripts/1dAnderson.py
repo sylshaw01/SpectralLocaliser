@@ -21,9 +21,17 @@ def single_iteration(args):
     seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
     np.random.seed(seed)
     m = OneDimensionalAnderson(L, disorder, rho, kappa, X)
-    hr, hz , hev = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues, sparse=sparse, tolerance=1e-7, slepc=False, returneVals=retevals,returneVecs=retevecs)
-    slr, slz , slev = m.compute_statistics(m.SL,num_eigenvalues = 2 * num_eigenvalues,sparse = sparse, tolerance = 1e-7, slepc = False,  returneVals=retevals, returneVecs=retevecs)
-    return hr, hz, slr, slz, hev, slev, seed
+    # hr, hz , hev = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues, sparse=sparse, tolerance=1e-7, slepc=False, returneVals=retevals,returneVecs=retevecs)
+    # slr, slz , slev = m.compute_statistics(m.SL,num_eigenvalues = 2 * num_eigenvalues,sparse = sparse, tolerance = 1e-7, slepc = False,  returneVals=retevals, returneVecs=retevecs)
+    # return hr, hz, slr, slz, hev, slev, seed
+
+    m.find_eigenvalues(m.H, num_eigenvalues=num_eigenvalues, sparse=sparse)
+    hevals = m.eigvals_H
+    m.find_eigenvalues(m.SL, num_eigenvalues=2 * num_eigenvalues, sparse=sparse)
+    slevals = m.eigvals_SL
+    slIPR = m.compute_IPR(m.eigvecs_SL)
+    hIPR = m.compute_IPR(m.eigvecs_H)
+    return hevals, slevals, hIPR, slIPR, seed
 
 
 
@@ -73,10 +81,11 @@ if __name__ == "__main__":
     total_calculations =  len(disorder_values) * num_disorder_realizations
     print(f"Total calculations to be performed: {total_calculations}")
 
-    hr_results = np.zeros(( len(disorder_values), num_disorder_realizations))
-    hz_results = np.zeros(( len(disorder_values), num_disorder_realizations))
-    slr_results = np.zeros(( len(disorder_values), num_disorder_realizations))
-    slz_results = np.zeros(( len(disorder_values), num_disorder_realizations))
+    
+    heval_results = np.zeros((len(disorder_values),num_disorder_realizations,L))
+    sleval_results = np.zeros((len(disorder_values),num_disorder_realizations,L * 2))
+    iprH_results = np.zeros((len(disorder_values),num_disorder_realizations,L))
+    iprSL_results = np.zeros((len(disorder_values),num_disorder_realizations,L * 2))
     seeds = np.zeros(( len(disorder_values), num_disorder_realizations))
     total_time = time.time()
 
@@ -87,33 +96,29 @@ if __name__ == "__main__":
         modelToGetX =  OneDimensionalAnderson(L,0,rho,kappa)
         X = modelToGetX.X
         SLsample = modelToGetX.SL
-        if get_eigvals:
-            heval_results = np.zeros((len(disorder_values),num_disorder_realizations,L))
-            sleval_results = np.zeros((len(disorder_values),num_disorder_realizations,SLsample.shape[0]))
         num_eig = num_eigenvalues
         for j, disorder in enumerate(disorder_values):
             print(f"   Disorder: {disorder}", flush=True)
+            kappa = (2 +disorder * 0.5)/rho
             args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse, get_eigvals, get_eigvecs, i) for i in range(num_disorder_realizations)]
             disorder_start_time = time.time()
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time taken for disorder {disorder}: {time.time() - disorder_start_time:.2f} seconds", flush=True)
-            hr_values, hz_values, slr_values, slz_values,  hevalues, slevalues,seed_values = zip(*results)
-            hr_results[ j, :] = hr_values
-            hz_results[ j, :] = hz_values
-            slr_results[ j, :] = slr_values
-            slz_results[ j, :] = slz_values
+            hevalues, slevalues,heIPR, slIPR, seed_values = zip(*results)
             seeds[ j, :] = seed_values
-            if get_eigvals:
-                heval_results[j,:] = hevalues
-                sleval_results[j,:] = slevalues
-    print(f"Total time taken for all calculations: {time.time() - total_time:.2f} seconds", flush=True)
-    
+            heval_results[j,:, :] = hevalues
+            sleval_results[j,:, :] = slevalues
+            iprH_results[j,:, :] = heIPR
+            iprSL_results[j,:, :] = slIPR
+            
+    elapsed_time = time.time() - total_time
+    print(f"Total time for all calculations: {elapsed_time:.2f} seconds, or {(elapsed_time)/60:.2f} minutes, {(elapsed_time)/3600:.2f} hours", flush=True)   
     import datetime
 
-    current_date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
 
     filename = f"../data/1dAnderson_L{L}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realizations}_{current_date}_results.npz"
-    np.savez(filename, L_values = L, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds, heval_results = heval_results, sleval_results = sleval_results)
+    np.savez(filename,  disorder_values = disorder_values,  seeds = seeds, hevals_results = heval_results, slev_results = sleval_results, hipr_results=iprH_results, slipr_results=iprSL_results)  
     print(f"Results saved to {filename}", flush=True)
 
 

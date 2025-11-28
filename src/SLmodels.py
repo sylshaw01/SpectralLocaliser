@@ -138,6 +138,26 @@ class Model(ABC):
         IPRs = np.sum(np.abs(eigvecs)**4, axis=0)
         return IPRs
     
+    def projection_operator_lower(fermi_energy: float, operator: np.ndarray, eigenvalues, eigenvectors) -> np.ndarray:
+
+        occupied_indices = eigenvalues <= fermi_energy
+        if not np.any(occupied_indices):
+            return np.zeros_like(operator)
+        occupied_eigenvectors = eigenvectors[:, occupied_indices]
+        projector = occupied_eigenvectors @ occupied_eigenvectors.conj().T
+        return projector
+    
+    def calculate_local_chern_marker(self, P, X, Y, ac, ucs):
+        Q = np.eye(P.shape[0]) - P
+
+        C_mat = P @ X @ Q @ Y @ P  
+        C_diag = np.diag(C_mat)
+        C_diag_reshaped = C_diag.reshape(P.shape[0]//ucs, ucs)
+
+        chern_marker_per_unit_cell = -((4 * np.pi)/ac) * np.imag(np.sum(C_diag_reshaped, axis=1))
+
+        return chern_marker_per_unit_cell
+    
 
 
 class OneDimensionalAnderson(Model):
@@ -149,9 +169,9 @@ class OneDimensionalAnderson(Model):
         # on diagonal disorder
         diag = (np.random.rand(L)-0.5) * disorder
         # off diagonal hopping terms
-        off_diag = np.ones(L-1)
+        off_diag = 1.0 * np.ones(L-1)
 
-        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='lil')
+        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='csr')
 
         return H
     
@@ -230,7 +250,9 @@ class OneDimensionalSSHBlockBasis(OneDimensionalSSH):
         #       [ A  0  ]
         # where A = m + S 
         # Then H = H_0 + disorder
-        # Fix this! it isn't accurate becasue of a misunderstanding I had, only use the alternate basis for now
+        # This is fixed, and works to my knowledge. The tricky part is that the spectral localiser is
+        # SL = [kappa X, A,
+        #      A*, -kappa X]
         L = self.L
         intracell_hopping = self.v * np.ones(L//2)
         intercell_hopping = self.w * np.ones(L//2 - 1)
@@ -238,31 +260,49 @@ class OneDimensionalSSHBlockBasis(OneDimensionalSSH):
         intracell_hopping_disordered = intracell_hopping + (np.random.rand(L//2)-0.5) * self.disorder
         intercell_hopping_disordered = intercell_hopping + (np.random.rand(L//2 - 1)-0.5) * self.disorder
 
-        A = sp.diags([intracell_hopping_disordered,intercell_hopping_disordered],[0,1],shape=(L//2,L//2),format='csr')
-        H0 = sp.bmat([[sp.csr_matrix((L//2,L//2)),A.T],[A,sp.csr_matrix((L//2,L//2))]],format='csr')
-        disorderA = (np.random.rand(L//2)-0.5) * self.disorder
-        disorderB = -disorderA
-        H_disorderA = sp.diags(disorderA,0,shape=(L//2,L//2),format='csr')
-        H_disorderB = sp.diags(disorderB,0,shape=(L//2,L//2),format='csr')
+        A = np.diag(intracell_hopping_disordered, k=0) + np.diag(intercell_hopping_disordered, k=-1)
+        
+        
+        H = sp.bmat([[sp.csr_matrix((L//2,L//2)),A],
+                       [A.T,sp.csr_matrix((L//2,L//2))]], format='csr')
+        #disorderA = (np.random.rand(L//2)-0.5) * self.disorder
+        #disorderB = -disorderA
+        #H_disorderA = sp.diags(disorderA,0,shape=(L//2,L//2),format='csr')
+        #H_disorderB = sp.diags(disorderB,0,shape=(L//2,L//2),format='csr')
 
-        H = H0 + sp.bmat([[sp.csr_matrix((L//2,L//2)),H_disorderA],[H_disorderB,sp.csr_matrix((L//2,L//2))]],format='csr')
+        #H = H0 + sp.bmat([[sp.csr_matrix((L//2,L//2)),H_disorderA],[H_disorderB,sp.csr_matrix((L//2,L//2))]],format='csr')
 
         return H
 
     def create_position_operator(self):
-        # position operator is slightly strange because all A
-        # and all B sites are separated
-        # as in in the position basis, a_0, a_1, a_2, ..., b_0, b_1, b_2, ...
+        # to keep block structure, this position operator is in terms of unit cells,
+        # so has half the size of the hamiltonian
 
-        all_positions = np.linspace(-self.rho,self.rho,self.L)
-        positions_A = all_positions[0::2]
-        positions_B = all_positions[1::2]
-        row_vector_A = sp.diags(positions_A, 0, shape=(self.L//2, self.L//2), format='csr')
-        row_vector_B = sp.diags(positions_B, 0, shape=(self.L//2, self.L//2), format='csr')
+        # all_positions = np.linspace(-self.rho,self.rho,self.L)
+        # positions_A = all_positions[0::2]
+        # positions_B = all_positions[1::2]
+        # row_vector_A = sp.diags(positions_A, 0, shape=(self.L//2, self.L//2), format='csr')
+        # row_vector_B = sp.diags(positions_B, 0, shape=(self.L//2, self.L//2), format='csr')
 
-        X = sp.bmat([[row_vector_A,sp.csr_matrix((self.L//2,self.L//2))],[sp.csr_matrix((self.L//2,self.L//2)),row_vector_B]],format='csr')
+        # X = sp.bmat([[row_vector_A,sp.csr_matrix((self.L//2,self.L//2))],[sp.csr_matrix((self.L//2,self.L//2)),row_vector_B]],format='csr')
+        X_diag = np.linspace(-self.rho,self.rho,self.L//2)
+        X = sp.diags(X_diag,0, format='csr')
 
         return X
+    
+    def create_localiser(self):
+        kappa = self.kappa
+        X = self.X
+        H = self.H
+
+        X_block = sp.bmat([
+            [kappa * X, sp.csr_matrix((self.L//2, self.L//2))],
+             [sp.csr_matrix((self.L//2, self.L//2)), -kappa * X]], format='csr'
+        )
+
+        localiser = X_block + H
+
+        return localiser
     
 class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
     # what I mean by alternating basis is
@@ -355,17 +395,33 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
 
 class OneDimensionalAubryAndre(Model):
 
-    def create_hamiltonian(self):
+    def __init__(self,L,disorder, rho, kappa, X=None, beta=(np.sqrt(5)-1)/2, theta=0):
+        self.beta = beta
+        self.theta = theta
+    
+        super().__init__(L,disorder,rho,kappa,X)
+
+    def create_hamiltonian(self, pbc = False):
         L = self.L
         disorder = self.disorder
+        beta = self.beta
+        theta = self.theta
 
         # on diagonal disorder
-        beta = (1 + 5**0.5) / 2
-        diag = disorder * np.cos(2 * np.pi *beta *  np.arange(L))
+        diag = disorder * np.cos((2 * np.pi *beta *  np.arange(L)) + theta)
         # off diagonal hopping terms
-        off_diag = np.ones(L-1)
+        off_diag = -1.0 * np.ones(L-1)
 
-        H = sp.diags([off_diag,diag,off_diag],[-1,0,1],shape=(L,L),format='csr')
+        diagonals = [off_diag, diag, off_diag]
+        offsets = [-1,0,1]
+
+        if pbc:
+            diagonals.append([-1.0])
+            offsets.append(L-1)
+            diagonals.append([-1.0])
+            offsets.append(-(L-1))
+
+        H = sp.diags(diagonals,offsets,shape=(L,L),format='csr')
 
         return H
     
@@ -580,6 +636,17 @@ class ThreeDimensionalAnderson(Model):
         return localiser
 
 class ThreeDimensionalTopologicalChiralInsulator(Model):
+    def create_hamiltonian(self):
+        pass
+
+    def create_position_operator(self):
+        pass
+
+    def create_localiser(self):
+        pass
+
+
+class TwoDimensionalHaldane(Model):
     def create_hamiltonian(self):
         pass
 

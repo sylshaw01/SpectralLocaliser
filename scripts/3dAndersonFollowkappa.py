@@ -11,6 +11,7 @@ from multiprocessing import cpu_count
 #multiprocessing.set_start_method('spawn', force=True)
 from multiprocessing import Pool
 import time
+import datetime
 import sys
 sys.path.append('../src')
 from SLmodels import *
@@ -111,9 +112,8 @@ if __name__ == "__main__":
                 sleval_results[j,:] = slevalues
     print(f"Total time taken for all calculations: {time.time() - total_time:.2f} seconds", flush=True)
     
-    import datetime
 
-    current_date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
 
     filename = f"../data/3dAnderson_L{L}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realizations}_{current_date}_results.npz"
     np.savez(filename, L_values = L, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results, seeds = seeds, heval_results = heval_results, sleval_results = sleval_results)

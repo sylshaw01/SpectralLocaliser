@@ -6,7 +6,7 @@ cat > jobAA.sh << "EOF"
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=84
+#SBATCH --cpus-per-task=128
 #SBATCH --mem-per-cpu=4591
 #SBATCH --time=48:00:00
 

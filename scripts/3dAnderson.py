@@ -11,6 +11,7 @@ from multiprocessing import cpu_count
 #multiprocessing.set_start_method('spawn', force=True)
 from multiprocessing import Pool
 import time
+import datetime
 import sys
 sys.path.append('../src')
 from SLmodels import *
@@ -89,6 +90,7 @@ if __name__ == "__main__":
                 slr_results[i, j, :] = slr_values
                 slz_results[i, j, :] = slz_values
     
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     filename = f"../data/3dAnderson_L{L_start}-{L_end}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realizations}_results.npz"
     np.savez(filename, L_values = L_values, disorder_values = disorder_values, hr_results = hr_results, hz_results = hz_results, slr_results = slr_results, slz_results = slz_results)
     print(f"Results saved to {filename}", flush=True)
