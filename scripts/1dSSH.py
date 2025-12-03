@@ -19,15 +19,15 @@ sys.path.append('../src')
 from SLmodels import *
 
 def single_iteration(args):
-    L, rho, kappa, disorder, num_eigenvalues, X, sparse, reteval, retevec, v,w, i = args
-    seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigenvalues*10e4) + i
+    L, rho, kappa, disorder, num_eigval, X, sparse, return_eval, return_evec, v,w, i = args
+    seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigval*10e4) + i
     np.random.seed(seed)
     m = OneDimensionalSSHBlockBasis(L, disorder, rho, kappa,v,w,X)
     #hr, hz, hevals = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues,sparse=sparse,tolerance=1e-7,slepc=False, returneVals=reteval, returneVecs=retevec)
     #slr, slz, slevals = m.compute_statistics(m.SL,num_eigenvalues= num_eigenvalues,sparse=sparse,tolerance=1e-7,slepc= False,returneVals=reteval, returneVecs=retevec)
-    m.find_eigenvalues(m.H, num_eigenvalues=num_eigenvalues, sparse=sparse)
+    m.find_eigval(m.H, num_eigval=num_eigval, sparse=sparse)
     hevals = m.eigvals_H
-    m.find_eigenvalues(m.SL, num_eigenvalues=num_eigenvalues, sparse=sparse)
+    m.find_eigvec(m.SL, num_eigval=num_eigval, sparse=sparse)
     slevals = m.eigvals_SL
     slIPR = m.compute_IPR(m.eigvecs_SL)
     heIPR = m.compute_IPR(m.eigvecs_H)

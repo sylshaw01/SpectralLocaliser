@@ -14,11 +14,11 @@ class Model(ABC):
         self.kappa = kappa # spectral localiser 'potential strength'
         self.X = X if X is not None else self.create_position_operator() 
         self.H = self.create_hamiltonian()
-        self.SL = self.create_localiser()
-        self.eigvecs_H = None
-        self.eigvecs_SL = None
-        self.eigvals_H = None
-        self.eigvals_SL = None
+        self.spectral_localiser = self.create_localiser()
+        self.H_eigval = None
+        self.spectral_localiser_eigval = None
+        self.H_eigvec = None
+        self.sl_eigvec = None
     
     @abstractmethod
     def create_hamiltonian(self):
@@ -34,7 +34,7 @@ class Model(ABC):
 
     
 
-    def find_eigenvalues(self, operator, num_eigenvalues=None, sparse=True):
+    def find_eigval(self, operator, num_eigval=None, sparse=True):
         # finds eigenvalues and eigenvectors of a given operator. It will default to sparse methods unless told not to.
         # 
         # args:
@@ -46,38 +46,38 @@ class Model(ABC):
         #  eigvals: array of eigenvalues
         #  eigvecs: array of eigenvectors
 
-        if num_eigenvalues is None:
-            num_eigenvalues = self.L // 5
+        if num_eigval is None:
+            num_eigval = self.L // 5
         
-        if sparse == False or num_eigenvalues == self.L:
+        if sparse == False or num_eigval == self.L:
             operator_dense = operator.toarray()
             if not np.allclose(operator_dense, operator_dense.conj().T):
-                eigvals, eigvecs = np.linalg.eig(operator_dense)
-                idx = np.argsort(eigvals)
-                eigvals = eigvals[idx]
-                eigvecs = eigvecs[:, idx]
+                eigval, eigvec = np.linalg.eig(operator_dense)
+                idx = np.argsort(eigval)
+                eigval = eigval[idx]
+                eigvec = eigvec[:, idx]
             else:
-                eigvals, eigvecs = eigh(operator_dense)
+                eigval, eigvec = eigh(operator_dense)
         else:
-            eigvals, eigvecs = eigsh(operator, k=2 * num_eigenvalues, which='SM')
+            eigval, eigvec = eigsh(operator, k=2 * num_eigval, which='SM')
 
         if operator is self.H:
-            self.eigvals_H = eigvals
-            self.eigvecs_H = eigvecs
+            self.H_eigval = eigval
+            self.H_eigvec = eigvec
         elif operator is self.SL:
-            self.eigvals_SL = eigvals
-            self.eigvecs_SL = eigvecs
+            self.spectral_localiser_eigval = eigval
+            self.spectral_localiser_eigvec = eigvec
     
-    def calculate_r(self, eigvals):
+    def calculate_r(self, eigval):
         # Once eigenvalues are found, calculate the r value
-        eigvals_s = np.diff(eigvals)
-        min_vals = np.minimum(eigvals_s[:-1],eigvals_s[1:])
-        max_vals = np.maximum(eigvals_s[:-1],eigvals_s[1:])
+        eigval_s = np.diff(eigval)
+        min_vals = np.minimum(eigval_s[:-1],eigval_s[1:])
+        max_vals = np.maximum(eigval_s[:-1],eigval_s[1:])
         r = np.divide(min_vals,max_vals,out=np.zeros_like(min_vals, dtype=float),where=max_vals!=0)
         return r.mean()
     
-    def calculate_z(self, eigvals):
-        s = np.diff(eigvals)
+    def calculate_z(self, eigval):
+        s = np.diff(eigval)
         s_i_minus_2 = s[:-4]
         s_i_minus_1 = s[1:-3]
         s_i         = s[2:-2]
@@ -93,7 +93,7 @@ class Model(ABC):
         z = np.divide(nn, nnn, out=np.zeros_like(nn, dtype=float), where=nnn!=0)
         return z.mean()
     
-    def compute_statistics(self, operator, num_eigenvalues=None, sparse=True, tolerance=1e-7, slepc=False, returneVals=False,returneVecs=False):
+    def compute_statistics(self, operator, num_eigval=None, sparse=True, tolerance=1e-7, slepc=False, return_eigval=False,return_eigvec=False):
         # given an operator, computer the r and z statistics
         #
         # args:
@@ -104,47 +104,42 @@ class Model(ABC):
         # returns:
         #  r: the mean adjacent gap ratio
         #  z: the mean next nearest neighbour ratio
-        if slepc:
-            eigvals, eigvecs = self.find_eigvals_slepc(operator,num_eigenvalues)
-        else:
-            eigvals, eigvecs = self.find_eigenvalues(operator,num_eigenvalues, sparse)
-        sorted_eigvals = np.sort(eigvals)
-        ev = sorted_eigvals.copy()
-        vectors = eigvecs.copy()
+
+        # If the eigenvalues have not already been found, find them
+        if self.eigval is None:
+            if slepc:
+                self.find_eigval_slepc(operator,num_eigval)
+            else:
+                self.find_eigval(operator,num_eigval, sparse)
+        sorted_eigval = np.sort(self.eigval)
         #print(f"Found {len(sorted_eigvals)} eigenvalues")
-        positive_eigvals = sorted_eigvals[sorted_eigvals > 0] 
+        positive_eigval = sorted_eigval[sorted_eigval > 0] 
         #print(f"Found {len(positive_eigvals)} positive eigenvalues")
-        usable_eigvals  = [positive_eigvals[0]] if len(positive_eigvals) > 0 else []
+        usable_eigval  = [positive_eigval[0]] if len(positive_eigval) > 0 else []
         
-        for val in positive_eigvals[1:]:
-            if val - usable_eigvals[-1] > tolerance:
-                usable_eigvals.append(val)
+        for val in positive_eigval[1:]:
+            if val - usable_eigval[-1] > tolerance:
+                usable_eigval.append(val)
         #print(f"After applying tolerance of {tolerance}, count is {len(usable_eigvals)}")
-        positive_eigvals = np.array(usable_eigvals)
-        r = self.calculate_r(positive_eigvals)
-        z = self.calculate_z(positive_eigvals)
-        if returneVals==False and returneVecs==False:
-            return r, z
-        elif returneVals==True and returneVecs==False:
-            return r, z, ev
-        elif returneVecs ==True and returneVals==False:
-            return r, z, vectors
-        else:
-            return r, z, ev, vectors
+        positive_eigval = np.array(usable_eigval)
+        r = self.calculate_r(positive_eigval)
+        z = self.calculate_z(positive_eigval)
+
+        return r, z
         
-    def compute_IPR(self, eigvecs):
+    def compute_IPR(self, eigvec):
         # computes the inverse participation ratio for a set of eigenvectors
         # IPR(psi) = sum_i |psi_i|^4 
-        IPRs = np.sum(np.abs(eigvecs)**4, axis=0)
-        return IPRs
+        ipr = np.sum(np.abs(eigvec)**4, axis=0)
+        return ipr
     
-    def projection_operator_lower(fermi_energy: float, operator: np.ndarray, eigenvalues, eigenvectors) -> np.ndarray:
+    def projection_operator_lower(fermi_energy: float, operator: np.ndarray, eigval, eigvec) -> np.ndarray:
 
-        occupied_indices = eigenvalues <= fermi_energy
+        occupied_indices = eigval <= fermi_energy
         if not np.any(occupied_indices):
             return np.zeros_like(operator)
-        occupied_eigenvectors = eigenvectors[:, occupied_indices]
-        projector = occupied_eigenvectors @ occupied_eigenvectors.conj().T
+        occupied_eigvec = eigvec[:, occupied_indices]
+        projector = occupied_eigvec @ occupied_eigvec.conj().T
         return projector
     
     def calculate_local_chern_marker(self, P, X, Y, ac, ucs):
@@ -355,18 +350,17 @@ class OneDimensionalSSHAlternatingBasis(OneDimensionalSSH):
         # where sig of an operator is the number of positive eigvals - number of negative eigvals
 
         SRL = self.create_symmetry_reduced_localiser(x0,E0)
-        eigvals, eigvecs = self.find_eigenvalues(SRL, sparse=False)
+        eigval, eigvec = self.find_eigval(SRL, sparse=False)
 
-        local_winding_number = (np.sum(eigvals > 0) - np.sum(eigvals < 0)) // 2
+        local_winding_number = (np.sum(eigval > 0) - np.sum(eigval < 0)) // 2
         
         return local_winding_number
     
-    def calculate_everything(self, x0=0, E0=0, num_eigenvalues=None, sparse=False):
-        slevalssrl, c = self.find_eigenvalues(self.create_symmetry_reduced_localiser(0,0), num_eigenvalues, sparse)
-        rh, zh, evals = self.compute_statistics(self.H,num_eigenvalues,sparse, tolerance=1e-7, slepc=False, returneVals=True, returneVecs=False)
-        rsl, zsl, slevals = self.compute_statistics(self.SL,num_eigenvalues,sparse, tolerance=1e-7, slepc=False, returneVals=True, returneVecs=False)
+    def calculate_everything(self, x0=0, E0=0, num_eigval=None, sparse=False):
+        rh, zh = self.compute_statistics(self.H,num_eigval,sparse, tolerance=1e-7, slepc=False, return_eval=True, return_evec=False)
+        rsl, zsl = self.compute_statistics(self.spectral_localiser,num_eigval,sparse, tolerance=1e-7, slepc=False, return_eval=True, return_evec=False)
         
-        return  rh, zh,rsl, zsl,  evals, slevals, slevalssrl
+        return  rh, zh,rsl, zsl
 
     
 
