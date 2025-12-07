@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 
 class Model(ABC):
 
-    def __init__(self,L,disorder, rho, kappa, X=None):
+    def __init__(self,L,disorder, rho, kappa, X=None, periodic = False):
         self.L = L # system size
         self.disorder = disorder # disorder strength
         self.rho = rho # fixed value rho for position operator
@@ -18,7 +18,8 @@ class Model(ABC):
         self.H_eigval = None
         self.spectral_localiser_eigval = None
         self.H_eigvec = None
-        self.sl_eigvec = None
+        self.spectral_localiser_eigvec = None
+        self.periodic = periodic
     
     @abstractmethod
     def create_hamiltonian(self):
@@ -64,7 +65,7 @@ class Model(ABC):
         if operator is self.H:
             self.H_eigval = eigval
             self.H_eigvec = eigvec
-        elif operator is self.SL:
+        elif operator is self.spectral_localiser:
             self.spectral_localiser_eigval = eigval
             self.spectral_localiser_eigvec = eigvec
     
@@ -106,7 +107,12 @@ class Model(ABC):
         #  z: the mean next nearest neighbour ratio
 
         # If the eigenvalues have not already been found, find them
-        if self.eigval is None:
+
+        if operator == self.H:
+            eigval = self.H_eigval
+        elif operator == self.spectral_localiser:
+            eigval = self.spectral_localiser_eigval
+        if eigval is None:
             if slepc:
                 self.find_eigval_slepc(operator,num_eigval)
             else:
@@ -241,8 +247,8 @@ class OneDimensionalSSHBlockBasis(OneDimensionalSSH):
 
     def create_hamiltonian(self):
         # following the basis described in notes
-        # H_0 = [ 0  A* ]
-        #       [ A  0  ]
+        # H_0 = [ 0  A ]
+        #       [ A*  0  ]
         # where A = m + S 
         # Then H = H_0 + disorder
         # This is fixed, and works to my knowledge. The tricky part is that the spectral localiser is
@@ -253,31 +259,22 @@ class OneDimensionalSSHBlockBasis(OneDimensionalSSH):
         intercell_hopping = self.w * np.ones(L//2 - 1)
 
         intracell_hopping_disordered = intracell_hopping + (np.random.rand(L//2)-0.5) * self.disorder
-        intercell_hopping_disordered = intercell_hopping + (np.random.rand(L//2 - 1)-0.5) * self.disorder
-
+        intercell_hopping_disordered = intercell_hopping + (np.random.rand(L//2 - 1)-0.5) * self.disorder                          
         A = np.diag(intracell_hopping_disordered, k=0) + np.diag(intercell_hopping_disordered, k=-1)
+        # if self.periodic:
+        #     A[0,-1] = intercell_hopping_disordered[-1]
+        
+
         
         
         H = sp.bmat([[sp.csr_matrix((L//2,L//2)),A],
                        [A.T,sp.csr_matrix((L//2,L//2))]], format='csr')
-        #disorderA = (np.random.rand(L//2)-0.5) * self.disorder
-        #disorderB = -disorderA
-        #H_disorderA = sp.diags(disorderA,0,shape=(L//2,L//2),format='csr')
-        #H_disorderB = sp.diags(disorderB,0,shape=(L//2,L//2),format='csr')
-
-        #H = H0 + sp.bmat([[sp.csr_matrix((L//2,L//2)),H_disorderA],[H_disorderB,sp.csr_matrix((L//2,L//2))]],format='csr')
-
+        
         return H
 
     def create_position_operator(self):
         # to keep block structure, this position operator is in terms of unit cells,
         # so has half the size of the hamiltonian
-
-        # all_positions = np.linspace(-self.rho,self.rho,self.L)
-        # positions_A = all_positions[0::2]
-        # positions_B = all_positions[1::2]
-        # row_vector_A = sp.diags(positions_A, 0, shape=(self.L//2, self.L//2), format='csr')
-        # row_vector_B = sp.diags(positions_B, 0, shape=(self.L//2, self.L//2), format='csr')
 
         # X = sp.bmat([[row_vector_A,sp.csr_matrix((self.L//2,self.L//2))],[sp.csr_matrix((self.L//2,self.L//2)),row_vector_B]],format='csr')
         X_diag = np.linspace(-self.rho,self.rho,self.L//2)
@@ -470,7 +467,7 @@ class OneDimensionalLiebModel(Model):
         self.kappa = kappa
         self.X = X if X is not None else self.create_position_operator()
         self.H = self.create_hamiltonian()
-        self.SL = self.create_localiser()
+        self.spectral_localiser = self.create_localiser()
 
     def create_hamiltonian(self):
         off_diag = np.ones(self.L - 1)
@@ -506,13 +503,261 @@ class TwoDimensionalLiebModel(Model):
         self.kappa = kappa
         self.X = X if X is not None else self.create_position_operator()
         self.H = self.create_hamiltonian()
-        self.SL = self.create_localiser()
+        self.spectral_localiser = self.create_localiser()
 
     def create_hamiltonian(self):
         pass
 
     def create_position_operator(self):
         pass
+
+    def create_localiser(self):
+        pass
+
+class TwoDimensionalHaldane(Model):
+
+
+    def __init__(self, L, disorder, rho, kappa, X=None, t1=1.0, t2=1.0/3.0, M = 0.5, phi=np.pi/2):
+        self.L = L  # system size (assumed square lattice of size LxL)
+        self.disorder = disorder  # disorder strength
+        self.rho = rho  # fixed value rho for position operator
+        self.kappa = kappa  # spectral localiser 'potential strength'
+        self.t1 = t1  # nearest neighbor hopping amplitude
+        self.t2 = t2  # next-nearest neighbor hopping amplitude
+        self.M = M # Lattice inversion-breaking potential term
+        self.phi = phi  # phase for next-nearest neighbor hopping
+        self.X = X if X is not None else self.create_position_operator()
+        self.H = self.create_hamiltonian()
+        self.spectral_localiser = self.create_localiser()
+        self.P = None  # Projection operator placeholder
+
+    def create_hamiltonian(self):
+        """Generate the Hamiltonian matrix for the disordered Haldane model"""
+        mat_size = self.L * self.L * 2
+        
+        # On-site potentials
+        diagonal_a = np.zeros(mat_size, dtype=complex)
+        diagonal_b = np.zeros(mat_size, dtype=complex)
+        diagonal_disorder = np.zeros(mat_size, dtype=complex)
+        
+        for i in range(mat_size):
+            if (i % 2 == 0): 
+                diagonal_a[i] = self.M
+            else:  
+                diagonal_b[i] = -self.M
+            
+            if self.disorder > 0:
+                diagonal_disorder[i] = np.random.uniform(-self.disorder, self.disorder)
+        
+        on_site_terms = sp.diags(diagonal_a + diagonal_b + diagonal_disorder)
+        
+        # Nearest neighbor hopping terms
+        row_indices, col_indices, values = [], [], []
+        
+        # Equivalent to aLeft, bLeft, aRight, bRight, aDown, bUp
+        for i in range(mat_size):
+            # aLeft
+            if (i % 2 == 0) and (i % (2*self.L) != 0) and (i + 1 < mat_size):
+                row_indices.append(i)
+                col_indices.append(i + 1)
+                values.append(-self.t1)
+            
+            # bLeft
+            if (i % 2 == 1) and (i + 1 < mat_size):
+                row_indices.append(i)
+                col_indices.append(i + 1)
+                values.append(-self.t1)
+            
+            # aRight
+            if (i % 2 == 0) and (i - 1 >= 0):
+                row_indices.append(i)
+                col_indices.append(i - 1)
+                values.append(-self.t1)
+            
+            # bRight
+            if (i % 2 == 1) and (i - 1 >= 0) and (i % (2*self.L) != 1):
+                row_indices.append(i)
+                col_indices.append(i - 1)
+                values.append(-self.t1)
+            
+            # aDown
+            if (i % 2 == 0) and (i + (self.L*2 + 1) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L):
+                row_indices.append(i)
+                col_indices.append(i + (self.L*2 + 1))
+                values.append(-self.t1)
+            
+            # bUp
+            if (i % 2 == 1) and (i - (self.L*2 + 1) >= 0) and (i > (2*self.L)):
+                row_indices.append(i)
+                col_indices.append(i - (self.L*2 + 1))
+                values.append(-self.t1)
+        
+        nn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
+        
+        # Next-nearest neighbor hopping terms for sublattice A
+        row_indices, col_indices, values = [], [], []
+        
+        for i in range(mat_size):
+            # Only for sublattice A sites (even indices in Python, odd in Mathematica)
+            if i % 2 == 0:
+                # aNNNULeft
+                if (i - (self.L*2 + 2) >= 0) and (i > 2*self.L) and (i % (2*self.L) > 0):
+                    row_indices.append(i)
+                    col_indices.append(i - (self.L*2 + 2))
+                    values.append(-self.t2 * np.exp(1j*self.phi))
+                
+                # aNNNLeft
+                if (i - 2 >= 0) and (i % (self.L*2) != 0):
+                    row_indices.append(i)
+                    col_indices.append(i - 2)
+                    values.append(-self.t2 * np.exp(-1j*self.phi))
+                
+                # aNNNDRight
+                if (i + (self.L*2 + 2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L) and (i % (2*self.L) < (2*self.L - 1)):
+                    row_indices.append(i)
+                    col_indices.append(i + (self.L*2 + 2))
+                    values.append(-self.t2 * np.exp(-1j*self.phi))
+                
+                # aNNNDLeft
+                if (i + (self.L*2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L):
+                    row_indices.append(i)
+                    col_indices.append(i + (self.L*2))
+                    values.append(-self.t2 * np.exp(1j*self.phi))
+                
+                # aNNNRight
+                if (i + 2 < mat_size) and (i % (2*self.L) < (2*self.L - 2)):
+                    row_indices.append(i)
+                    col_indices.append(i + 2)
+                    values.append(-self.t2 * np.exp(1j*self.phi))
+                
+                # aNNNURight
+                if (i - (self.L*2) >= 0) and (i > (2*self.L)):
+                    row_indices.append(i)
+                    col_indices.append(i - (self.L*2))
+                    values.append(-self.t2 * np.exp(-1j*self.phi))
+        
+        annn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
+        
+        # Next-nearest neighbor hopping terms for sublattice B
+        row_indices, col_indices, values = [], [], []
+        
+        for i in range(mat_size):
+            # Only for sublattice B sites (odd indices in Python, even in Mathematica)
+            if i % 2 == 1:
+                # bNNNULeft
+                if (i - (self.L*2 + 2) >= 0) and (i > (2*self.L)) and ((i - (self.L*2 + 2)) % (2*self.L) != 1):
+                    row_indices.append(i)
+                    col_indices.append(i - (self.L*2 + 2))
+                    values.append(-self.t2 * np.exp(-1j*self.phi))
+                
+                # bNNNLeft
+                if (i - 2 >= 0) and (i % (self.L*2) != 3):
+                    row_indices.append(i)
+                    col_indices.append(i - 2)
+                    values.append(-self.t2 * np.exp(1j*self.phi))
+                
+                # bNNNDRight
+                if (i + (self.L*2 + 2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L) and (i % (2*self.L) != 1):
+                    row_indices.append(i)
+                    col_indices.append(i + (self.L*2 + 2))
+                    values.append(-self.t2 * np.exp(1j*self.phi))
+                
+                # bNNNDLeft
+                if (i + (self.L*2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L):
+                    row_indices.append(i)
+                    col_indices.append(i + (self.L*2))
+                    values.append(-self.t2 * np.exp(-1j*self.phi))
+                
+                # bNNNRight
+                if (i + 2 < mat_size) and (i % (2*self.L) != 1):
+                    row_indices.append(i)
+                    col_indices.append(i + 2)
+                    values.append(-self.t2 * np.exp(-1j*self.phi))
+                
+                # bNNNURight
+                if (i - (self.L*2) >= 0) and (i > 2*self.L):
+                    row_indices.append(i)
+                    col_indices.append(i - (self.L*2))
+                    values.append(-self.t2 * np.exp(1j*self.phi))
+        
+        bnnn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
+        
+        # Combine all terms
+        H = on_site_terms + nn_terms + annn_terms + bnnn_terms
+        
+        return H.toarray()  # Convert to dense for compatibility with later operations
+
+    def create_position_operator(self):
+        # Create position operators
+
+        mat_size = self.L * self.L * 2
+        x_operator = np.zeros((mat_size, mat_size))
+        y_operator = np.zeros((mat_size, mat_size))
+        
+        for i in range(mat_size):
+            # X coordinates
+            x_operator[i, i] = (1/2)*((self.L - 1) - np.floor((i)/(2*self.L))) + (1/2)*(i % (2*self.L))
+            
+            # Y coordinates
+            y_operator[i, i] = (3/(2*np.sqrt(3)))*((self.L - 1) - np.floor((i)/(2*self.L)))
+            if (i % 2) == 1:  # Equivalent to Mod[i,2] == 0 in Mathematica
+                y_operator[i, i] += 1/(2*np.sqrt(3))
+
+        return [x_operator, y_operator]
+
+    def projection_operator_lower(self, fermi_energy, ac=3/(2*np.sqrt(3)) ):
+        """Create projection operator for states below the Fermi energy"""
+        # Get eigenvalues and eigenvectors
+        
+        # Find indices of occupied states (below Fermi energy)
+        occupied_indices = np.where(self.H_eigval <= fermi_energy)[0]
+        
+        if len(occupied_indices) == 0:
+            return np.zeros_like(self.H)
+        
+        # Create projection operator
+        projector = np.zeros_like(self.H, dtype=complex)
+        for idx in occupied_indices:
+            v = self.H_eigvec[:, idx]
+            projector += np.outer(v, v.conj())
+        
+        self.P =  (ac/(2*np.pi)) * projector
+
+    def calculate_local_chern_marker(self, ac=3/(2*np.sqrt(3)), fermi_energy=0):
+    # Calculate Chern marker
+        mat_size = self.L * self.L * 2
+        if self.P is None:
+            self.projection_operator_lower(fermi_energy=fermi_energy, ac=ac)
+        
+        c_mat = self.P @ self.X[0] @ (np.eye(mat_size) - self.P) @ self.X[1] @ self.P
+        
+        # Calculate Chern marker per unit cell
+        chern_marker_per_unit_cell = np.zeros(mat_size // 2, dtype=float)
+        for k in range(mat_size // 2):
+            unit_cell_sites = [2*k, 2*k + 1]  # Python is 0-indexed
+            chern_marker_per_unit_cell[k] = -((4*np.pi)/ac) * np.imag(
+                sum(c_mat[site, site] for site in unit_cell_sites)
+            )
+        
+        # Sample from center region
+        center_width = self.L // 4
+        center_length = self.L // 4
+        center_x = self.L // 2
+        center_y = self.L // 2
+        
+        # Reshape to 2D for sampling from center
+        chern_marker_reshaped = chern_marker_per_unit_cell.reshape(self.L, self.L)
+        
+        # Calculate average over center region
+        center_values = []
+        for x in range(center_x - center_width, center_x + center_width + 1):
+            for y in range(center_y - center_length, center_y + center_length + 1):
+                if 0 <= x < self.L and 0 <= y < self.L:
+                    center_values.append(chern_marker_reshaped[x, y])
+        
+        chern_value = np.mean(center_values)
+
+        return chern_value
 
     def create_localiser(self):
         pass
@@ -525,7 +770,7 @@ class ThreeDimensionalLiebModel(Model):
         self.kappa = kappa
         self.X = X if X is not None else self.create_position_operator()
         self.H = self.create_hamiltonian()
-        self.SL = self.create_localiser()
+        self.spectral_localiser = self.create_localiser()
 
     def create_hamiltonian(self):
         pass

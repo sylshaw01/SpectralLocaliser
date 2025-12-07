@@ -7,33 +7,34 @@ os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
+# Normal imports
 import numpy as np
-#mport matplotlib.pyplot as plt
 from multiprocessing import cpu_count
-#multiprocessing.set_start_method('spawn', force=True)
 from multiprocessing import Pool
 import time
 import datetime
 import sys
+import hashlib
+# Import SLmodels from src
 sys.path.append('../src')
 from SLmodels import *
 
 def single_iteration(args):
+    # Unpack arguments
     L, rho, kappa, disorder, num_eigval, X, sparse, return_eval, return_evec, v,w, i = args
-    seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigval*10e4) + i
+    # Generate unique seed for reproducibility, using hashlib to avoid collisions
+    seed_str = f"{rho}_{disorder}_{num_eigval}_{i}_{kappa:.5f}_{L}_{v}_{w}"
+    #seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigval*10e4) + i OLD SEED GENERATION METHOD
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest(),15) % (2**32)
     np.random.seed(seed)
     m = OneDimensionalSSHBlockBasis(L, disorder, rho, kappa,v,w,X)
-    #hr, hz, hevals = m.compute_statistics(m.H,num_eigenvalues=num_eigenvalues,sparse=sparse,tolerance=1e-7,slepc=False, returneVals=reteval, returneVecs=retevec)
-    #slr, slz, slevals = m.compute_statistics(m.SL,num_eigenvalues= num_eigenvalues,sparse=sparse,tolerance=1e-7,slepc= False,returneVals=reteval, returneVecs=retevec)
     m.find_eigval(m.H, num_eigval=num_eigval, sparse=sparse)
-    hevals = m.eigvals_H
-    m.find_eigvec(m.SL, num_eigval=num_eigval, sparse=sparse)
-    slevals = m.eigvals_SL
-    slIPR = m.compute_IPR(m.eigvecs_SL)
-    heIPR = m.compute_IPR(m.eigvecs_H)
-    if i % 500 ==0:
-        print(f"            Completed {i} calculations")
-    return  hevals, slevals,heIPR, slIPR,  seed
+    H_eigval = m.H_eigval
+    m.find_eigvec(m.spectral_localiser, num_eigval=num_eigval, sparse=sparse)
+    spectral_localiser_eigval = m.spectral_localiser_eigval
+    spectral_localiser_IPR = m.compute_IPR(m.spectral_localiser_eigvec)
+    H_IPR = m.compute_IPR(m.H_eigvec)
+    return  H_eigval, spectral_localiser_eigval,H_IPR, spectral_localiser_IPR,  seed
 
 
 
@@ -41,6 +42,8 @@ if __name__ == "__main__":
     # Take cpu count and parameters file from command line arguments
     cpu_count = int(sys.argv[1]) if len(sys.argv) > 1 else cpu_count()
     parameters_file = sys.argv[2] if len(sys.argv) > 2 else 'parameters_1dSSH.txt'
+
+    
 
     print("-"*50)
     print("Calculating 1D SSH model Hamiltonian and spectral localiser statistics")
@@ -67,9 +70,21 @@ if __name__ == "__main__":
     # Number of eigenvalues to compute if we are using sparse methods
     num_eigenvalues = int(parameters.get('num_eigenvalues', 600))
 
+
+    disorder_values = np.linspace(disorder_start, disorder_end, disorder_resolution)
+
     # Boolean flags to get eigenvalues and eigenvectors
     reteval = True
     retevec = False
+
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    base_name = f"../data/1dSSH_L{L}_w_{w}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
+
+    shape_4d = (len(disorder_values), num_disorder_realisations, L, L)
+    shape_3d = (len(disorder_values), num_disorder_realisations, L)
+    shape_2d = (len(disorder_values), num_disorder_realisations)
+
+
 
     print(f"{cpu_count} Cores found! Using...All of them!!")
     print(f"Parameters loaded from {parameters_file}")
@@ -78,18 +93,20 @@ if __name__ == "__main__":
     print(f"Calculating {num_eigenvalues} eigenvalues per run")
     print("-"*50, flush=True)
 
-    disorder_values = np.linspace(disorder_start, disorder_end, disorder_resolution)
 
-    #hr_results = np.zeros(( len(disorder_values), num_disorder_realisations))
-    #hz_results = np.zeros(( len(disorder_values), num_disorder_realisations))
-    hev_results = np.zeros((len(disorder_values), num_disorder_realisations,L))
-    #slr_results = np.zeros(( len(disorder_values), num_disorder_realisations))
-    #slz_results = np.zeros(( len(disorder_values), num_disorder_realisations))
-    slev_results = np.zeros((len(disorder_values),num_disorder_realisations, L))
-    hipr_results = np.zeros((len(disorder_values),num_disorder_realisations, L))
-    slipr_results = np.zeros((len(disorder_values),num_disorder_realisations, L))
+    # NOTE - If sparse is true, then the size of these arrays needs to change
+    H_eigval_results = np.memmap(f"{base_name}_H_eigval.dat", dtype='float64', mode='w+', shape=shape_3d)
+    spectral_localiser_eigval_results = np.memmap(f"{base_name}_spectral_localiser_eigval.dat", dtype='float64', mode='w+', shape=shape_3d)
+    H_IPR_results = np.memmap(f"{base_name}_H_IPR.dat", dtype='float64', mode='w+', shape=shape_3d)
+    spectral_localiser_IPR_results = np.memmap(f"{base_name}_spectral_localiser_IPR.dat", dtype='float64', mode='w+', shape=shape_3d)
     seeds = np.zeros(( len(disorder_values), num_disorder_realisations))
     total_time = time.time()
+
+
+    with open(f"{base_name}_parameters.txt", 'w') as f:
+        for key, value in parameters.items():
+            f.write(f"{key} = {value}\n")
+
 
 
 
@@ -97,33 +114,34 @@ if __name__ == "__main__":
         modelToGetX =  OneDimensionalSSHBlockBasis(L,0,rho,kappa,v,w)
         X = modelToGetX.X
         sparse = False
-        num_eig = num_eigenvalues
+        num_eigval = num_eigenvalues
         for j, disorder in enumerate(disorder_values):
             print(f"   Disorder: {disorder}", flush=True)
             disorder_time = time.time()
             kappa = (3 + disorder * 0.5)/ rho # Rough value which is appropriate for kappa, for the SSH model
-            args_list  = [(L, rho, kappa, disorder, num_eig, X, sparse,reteval, retevec, v,w, i) for i in range(num_disorder_realisations)]
+            args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,reteval, retevec, v,w, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
-            hev, slev, hipr, slipr, seed_values = zip(*results)
-            # hr_results[ j, :] = hr_values
-            # hz_results[ j, :] = hz_values
-            # slr_results[ j, :] = slr_values
-            # slz_results[ j, :] = slz_values
+            H_eigval, spectral_localiser_eigval, H_IPR, spectral_localiser_IPR, seed_values = zip(*results)
             seeds[ j, :] = seed_values
-            hev_results[j,:, :] = np.array(hev)
-            slev_results[j,:, :] = np.array(slev)
-            hipr_results[j,:, :] = np.array(hipr)
-            slipr_results[j,:, :] = np.array(slipr)
+            H_eigval_results[j,:, :] = np.array(H_eigval)
+            spectral_localiser_eigval_results[j,:, :] = np.array(spectral_localiser_eigval)
+            H_IPR_results[j,:, :] = np.array(H_IPR)
+            spectral_localiser_IPR_results[j,:, :] = np.array(spectral_localiser_IPR)
+
+            seeds.flush()
+            H_eigval_results.flush()
+            spectral_localiser_eigval_results.flush()
+            H_IPR_results.flush()
+            spectral_localiser_IPR_results.flush()
 
     elapsed_time = time.time() - total_time
     print(f"Total time for all calculations: {elapsed_time:.2f} seconds, or {(elapsed_time)/60:.2f} minutes, {(elapsed_time)/3600:.2f} hours", flush=True)   
     
 
 
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    filename = f"../data/1dSSH_L{L}_w_{w}_rho{rho}_kappa{kappa}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}_results.npz"
-    np.savez(filename, disorder_values = disorder_values, seeds = seeds, hevals_results = hev_results, slev_results=slev_results, hipr_results=hipr_results, slipr_results=slipr_results)   
+    
+    np.savez(filename, disorder_values = disorder_values, seeds = seeds, H_eigval = H_eigval_results, spectral_localiser_eigval=spectral_localiser_eigval_results, H_IPR=H_IPR_results, spectral_localiser_IPR=spectral_localiser_IPR_results)   
     print(f"Results saved to {filename}", flush=True)
 
 
