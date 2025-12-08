@@ -21,19 +21,23 @@ from SLmodels import *
 
 def single_iteration(args):
     # Unpack arguments
-    L, rho, kappa, disorder, num_eigval, X, sparse, return_eval, return_evec, v,w, i = args
+    L, rho, kappa, disorder, num_eigval, X, sparse,return_evec, return_eval, v,w, i = args
     # Generate unique seed for reproducibility, using hashlib to avoid collisions
     seed_str = f"{rho}_{disorder}_{num_eigval}_{i}_{kappa:.5f}_{L}_{v}_{w}"
     #seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigval*10e4) + i OLD SEED GENERATION METHOD
-    seed = int(hashlib.md5(seed_str.encode()).hexdigest(),15) % (2**32)
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest(),16) % (2**32)
     np.random.seed(seed)
     m = OneDimensionalSSHBlockBasis(L, disorder, rho, kappa,v,w,X)
     m.find_eigval(m.H, num_eigval=num_eigval, sparse=sparse)
     H_eigval = m.H_eigval
-    m.find_eigvec(m.spectral_localiser, num_eigval=num_eigval, sparse=sparse)
+    H_eigvec = m.H_eigvec
+    m.find_eigval(m.spectral_localiser, num_eigval=num_eigval, sparse=sparse)
     spectral_localiser_eigval = m.spectral_localiser_eigval
+    spectral_localiser_eigvec = m.spectral_localiser_eigvec
     spectral_localiser_IPR = m.compute_IPR(m.spectral_localiser_eigvec)
     H_IPR = m.compute_IPR(m.H_eigvec)
+    if retevec:
+        return  H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, seed
     return  H_eigval, spectral_localiser_eigval,H_IPR, spectral_localiser_IPR,  seed
 
 
@@ -99,13 +103,18 @@ if __name__ == "__main__":
     spectral_localiser_eigval_results = np.memmap(f"{base_name}_spectral_localiser_eigval.dat", dtype='float64', mode='w+', shape=shape_3d)
     H_IPR_results = np.memmap(f"{base_name}_H_IPR.dat", dtype='float64', mode='w+', shape=shape_3d)
     spectral_localiser_IPR_results = np.memmap(f"{base_name}_spectral_localiser_IPR.dat", dtype='float64', mode='w+', shape=shape_3d)
-    seeds = np.zeros(( len(disorder_values), num_disorder_realisations))
+    if retevec:
+        H_eigvec_results = np.memmap(f"{base_name}_H_eigvec.dat", dtype='complex128', mode='w+', shape=shape_4d)
+        spectral_localiser_eigvec_results = np.memmap(f"{base_name}_spectral_localiser_eigvec.dat", dtype='complex128', mode='w+', shape=shape_4d)
+    
+    seeds = np.memmap(f"{base_name}_seeds.dat", dtype='int64', mode='w+', shape=shape_2d)
     total_time = time.time()
 
 
     with open(f"{base_name}_parameters.txt", 'w') as f:
         for key, value in parameters.items():
             f.write(f"{key} = {value}\n")
+            f.write(f"Created at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
 
 
@@ -119,21 +128,36 @@ if __name__ == "__main__":
             print(f"   Disorder: {disorder}", flush=True)
             disorder_time = time.time()
             kappa = (3 + disorder * 0.5)/ rho # Rough value which is appropriate for kappa, for the SSH model
-            args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,reteval, retevec, v,w, i) for i in range(num_disorder_realisations)]
+            args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,retevec, reteval, v,w, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
-            H_eigval, spectral_localiser_eigval, H_IPR, spectral_localiser_IPR, seed_values = zip(*results)
-            seeds[ j, :] = seed_values
-            H_eigval_results[j,:, :] = np.array(H_eigval)
-            spectral_localiser_eigval_results[j,:, :] = np.array(spectral_localiser_eigval)
-            H_IPR_results[j,:, :] = np.array(H_IPR)
-            spectral_localiser_IPR_results[j,:, :] = np.array(spectral_localiser_IPR)
+            if retevec:
+                H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, seed_values = zip(*results)
+                seeds[ j, :] = seed_values
+                H_eigval_results[j,:, :] = np.array(H_eigval)
+                spectral_localiser_eigval_results[j,:, :] = np.array(spectral_localiser_eigval)
+                H_eigvec_results[j,:, :, :] = np.array(H_eigvec)
+                spectral_localiser_eigvec_results[j,:, :, :] = np.array(spectral_localiser_eigvec)
 
-            seeds.flush()
-            H_eigval_results.flush()
-            spectral_localiser_eigval_results.flush()
-            H_IPR_results.flush()
-            spectral_localiser_IPR_results.flush()
+                seeds.flush()
+                H_eigval_results.flush()
+                spectral_localiser_eigval_results.flush()
+                H_eigvec_results.flush()
+                spectral_localiser_eigvec_results.flush()
+                continue
+            else:
+                H_eigval, spectral_localiser_eigval, H_IPR, spectral_localiser_IPR, seed_values = zip(*results)
+                seeds[ j, :] = seed_values
+                H_eigval_results[j,:, :] = np.array(H_eigval)
+                spectral_localiser_eigval_results[j,:, :] = np.array(spectral_localiser_eigval)
+                H_IPR_results[j,:, :] = np.array(H_IPR)
+                spectral_localiser_IPR_results[j,:, :] = np.array(spectral_localiser_IPR)
+
+                seeds.flush()
+                H_eigval_results.flush()
+                spectral_localiser_eigval_results.flush()
+                H_IPR_results.flush()
+                spectral_localiser_IPR_results.flush()
 
     elapsed_time = time.time() - total_time
     print(f"Total time for all calculations: {elapsed_time:.2f} seconds, or {(elapsed_time)/60:.2f} minutes, {(elapsed_time)/3600:.2f} hours", flush=True)   
@@ -141,8 +165,8 @@ if __name__ == "__main__":
 
 
     
-    np.savez(filename, disorder_values = disorder_values, seeds = seeds, H_eigval = H_eigval_results, spectral_localiser_eigval=spectral_localiser_eigval_results, H_IPR=H_IPR_results, spectral_localiser_IPR=spectral_localiser_IPR_results)   
-    print(f"Results saved to {filename}", flush=True)
+    # np.savez(filename, disorder_values = disorder_values, seeds = seeds, H_eigval = H_eigval_results, spectral_localiser_eigval=spectral_localiser_eigval_results, H_IPR=H_IPR_results, spectral_localiser_IPR=spectral_localiser_IPR_results)   
+    # print(f"Results saved to {filename}", flush=True)
 
 
 
