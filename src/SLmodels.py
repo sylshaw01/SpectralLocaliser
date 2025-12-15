@@ -117,7 +117,7 @@ class Model(ABC):
                 self.find_eigval_slepc(operator,num_eigval)
             else:
                 self.find_eigval(operator,num_eigval, sparse)
-        sorted_eigval = np.sort(self.eigval)
+        sorted_eigval = np.sort(eigval)
         #print(f"Found {len(sorted_eigvals)} eigenvalues")
         positive_eigval = sorted_eigval[sorted_eigval > 0] 
         #print(f"Found {len(positive_eigvals)} positive eigenvalues")
@@ -518,18 +518,13 @@ class TwoDimensionalHaldane(Model):
 
 
     def __init__(self, L, disorder, rho, kappa, X=None, t1=1.0, t2=1.0/3.0, M = 0.5, phi=np.pi/2):
-        self.L = L  # system size (assumed square lattice of size LxL)
-        self.disorder = disorder  # disorder strength
-        self.rho = rho  # fixed value rho for position operator
-        self.kappa = kappa  # spectral localiser 'potential strength'
         self.t1 = t1  # nearest neighbor hopping amplitude
         self.t2 = t2  # next-nearest neighbor hopping amplitude
         self.M = M # Lattice inversion-breaking potential term
         self.phi = phi  # phase for next-nearest neighbor hopping
-        self.X = X if X is not None else self.create_position_operator()
-        self.H = self.create_hamiltonian()
-        self.spectral_localiser = self.create_localiser()
         self.P = None  # Projection operator placeholder
+        super().__init__(L,disorder,rho,kappa,X)
+        
 
     def create_hamiltonian(self):
         """Generate the Hamiltonian matrix for the disordered Haldane model"""
@@ -557,27 +552,27 @@ class TwoDimensionalHaldane(Model):
         # Equivalent to aLeft, bLeft, aRight, bRight, aDown, bUp
         for i in range(mat_size):
             # aLeft
-            if (i % 2 == 0) and (i % (2*self.L) != 0) and (i + 1 < mat_size):
+            if (i % 2 == 0)  and (i - 1 >= 0) and ((i) % (2*self.L) != 0):
                 row_indices.append(i)
-                col_indices.append(i + 1)
+                col_indices.append(i - 1)
                 values.append(-self.t1)
             
             # bLeft
-            if (i % 2 == 1) and (i + 1 < mat_size):
+            if (i % 2 == 1) and (i - 1 >=0 ) :
+                row_indices.append(i)
+                col_indices.append(i - 1)
+                values.append(-self.t1)
+            
+            # aRight
+            if (i % 2 == 0) and (i + 1 < mat_size):
                 row_indices.append(i)
                 col_indices.append(i + 1)
                 values.append(-self.t1)
             
-            # aRight
-            if (i % 2 == 0) and (i - 1 >= 0):
-                row_indices.append(i)
-                col_indices.append(i - 1)
-                values.append(-self.t1)
-            
             # bRight
-            if (i % 2 == 1) and (i - 1 >= 0) and (i % (2*self.L) != 1):
+            if (i % 2 == 1) and (i + 1 < mat_size) and (i % (2*self.L) != (2*self.L - 1)):
                 row_indices.append(i)
-                col_indices.append(i - 1)
+                col_indices.append(i + 1)
                 values.append(-self.t1)
             
             # aDown
@@ -601,7 +596,7 @@ class TwoDimensionalHaldane(Model):
             # Only for sublattice A sites (even indices in Python, odd in Mathematica)
             if i % 2 == 0:
                 # aNNNULeft
-                if (i - (self.L*2 + 2) >= 0) and (i > 2*self.L) and (i % (2*self.L) > 0):
+                if (i - (self.L*2 + 2) >= 0)  and (i % (2*self.L) > 0):
                     row_indices.append(i)
                     col_indices.append(i - (self.L*2 + 2))
                     values.append(-self.t2 * np.exp(1j*self.phi))
@@ -613,13 +608,13 @@ class TwoDimensionalHaldane(Model):
                     values.append(-self.t2 * np.exp(-1j*self.phi))
                 
                 # aNNNDRight
-                if (i + (self.L*2 + 2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L) and (i % (2*self.L) < (2*self.L - 1)):
+                if (i + (self.L*2 + 2) < mat_size)  and (i % (2*self.L) < (2*self.L -2)):
                     row_indices.append(i)
-                    col_indices.append(i + (self.L*2 + 2))
+                    col_indices.append(i + (self.L*2 +2))
                     values.append(-self.t2 * np.exp(-1j*self.phi))
                 
                 # aNNNDLeft
-                if (i + (self.L*2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L):
+                if (i + (self.L*2) < mat_size):
                     row_indices.append(i)
                     col_indices.append(i + (self.L*2))
                     values.append(-self.t2 * np.exp(1j*self.phi))
@@ -631,12 +626,13 @@ class TwoDimensionalHaldane(Model):
                     values.append(-self.t2 * np.exp(1j*self.phi))
                 
                 # aNNNURight
-                if (i - (self.L*2) >= 0) and (i > (2*self.L)):
+                if (i - (self.L*2) >= 0) :
                     row_indices.append(i)
                     col_indices.append(i - (self.L*2))
                     values.append(-self.t2 * np.exp(-1j*self.phi))
         
         annn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
+        # annn_terms = annn_terms + annn_terms.conj().T  # Add in Hermitian conjugate parts
         
         # Next-nearest neighbor hopping terms for sublattice B
         row_indices, col_indices, values = [], [], []
@@ -645,21 +641,21 @@ class TwoDimensionalHaldane(Model):
             # Only for sublattice B sites (odd indices in Python, even in Mathematica)
             if i % 2 == 1:
                 # bNNNULeft
-                if (i - (self.L*2 + 2) >= 0) and (i > (2*self.L)) and ((i - (self.L*2 + 2)) % (2*self.L) != 1):
+                if (i - (self.L*2 + 2) >= 0)  and ((i) % (2*self.L) != 1):
                     row_indices.append(i)
                     col_indices.append(i - (self.L*2 + 2))
                     values.append(-self.t2 * np.exp(-1j*self.phi))
                 
                 # bNNNLeft
-                if (i - 2 >= 0) and (i % (self.L*2) != 3):
+                if (i - 2 >= 0) and (i % (self.L*2) != 1):
                     row_indices.append(i)
                     col_indices.append(i - 2)
                     values.append(-self.t2 * np.exp(1j*self.phi))
                 
                 # bNNNDRight
-                if (i + (self.L*2 + 2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L) and (i % (2*self.L) != 1):
+                if (i + (self.L*2 + 2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L) and (i % (2*self.L) != (2*self.L - 1)):
                     row_indices.append(i)
-                    col_indices.append(i + (self.L*2 + 2))
+                    col_indices.append(i + (self.L*2 +2))
                     values.append(-self.t2 * np.exp(1j*self.phi))
                 
                 # bNNNDLeft
@@ -669,61 +665,67 @@ class TwoDimensionalHaldane(Model):
                     values.append(-self.t2 * np.exp(-1j*self.phi))
                 
                 # bNNNRight
-                if (i + 2 < mat_size) and (i % (2*self.L) != 1):
+                if (i + 2 < mat_size) and (i % (2*self.L) != (2*self.L - 1)):
                     row_indices.append(i)
                     col_indices.append(i + 2)
                     values.append(-self.t2 * np.exp(-1j*self.phi))
                 
                 # bNNNURight
-                if (i - (self.L*2) >= 0) and (i > 2*self.L):
+                if (i - (self.L*2) >= 0) :
                     row_indices.append(i)
                     col_indices.append(i - (self.L*2))
                     values.append(-self.t2 * np.exp(1j*self.phi))
         
         bnnn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
-        
+        # bnnn_terms = bnnn_terms + bnnn_terms.conj().T  # Add in Hermitian conjugate parts
         # Combine all terms
         H = on_site_terms + nn_terms + annn_terms + bnnn_terms
         
-        return H.toarray()  # Convert to dense for compatibility with later operations
+        return H  
 
     def create_position_operator(self):
-        # Create position operators
-
         mat_size = self.L * self.L * 2
-        x_operator = np.zeros((mat_size, mat_size))
-        y_operator = np.zeros((mat_size, mat_size))
-        
-        for i in range(mat_size):
-            # X coordinates
-            x_operator[i, i] = (1/2)*((self.L - 1) - np.floor((i)/(2*self.L))) + (1/2)*(i % (2*self.L))
-            
-            # Y coordinates
-            y_operator[i, i] = (3/(2*np.sqrt(3)))*((self.L - 1) - np.floor((i)/(2*self.L)))
-            if (i % 2) == 1:  # Equivalent to Mod[i,2] == 0 in Mathematica
-                y_operator[i, i] += 1/(2*np.sqrt(3))
+        i = np.arange(mat_size)
 
-        return [x_operator, y_operator]
+        row = i // (2 * self.L)           # Unit cell row: 0 to L-1
+        unit_col = (i % (2 * self.L)) // 2  # Unit cell column: 0 to L-1
+        sublattice = i % 2                 # 0 = A, 1 = B
+
+        # Honeycomb coordinates with a1 = (1, 0), a2 = (0.5, √3/2)
+        # B sites offset from A by δ = (0.5, 1/(2√3)) within unit cell
+        x_diag = unit_col + 0.5 * row + 0.5 * sublattice
+        y_diag = (np.sqrt(3) / 2) * row + sublattice / (2 * np.sqrt(3))
+        
+        # Center at (0, 0)
+        x_diag -= np.mean(x_diag)
+        y_diag -= np.mean(y_diag)
+        
+        X_operator = sp.diags(x_diag, 0, shape=(mat_size, mat_size), format='csr')
+        Y_operator = sp.diags(y_diag, 0, shape=(mat_size, mat_size), format='csr')
+
+        return [X_operator, Y_operator]
 
     def projection_operator_lower(self, fermi_energy, ac=3/(2*np.sqrt(3)) ):
         """Create projection operator for states below the Fermi energy"""
         # Get eigenvalues and eigenvectors
         
+        if self.H_eigval is None or self.H_eigvec is None:
+            self.find_eigval(self.H, sparse=False)
         # Find indices of occupied states (below Fermi energy)
         occupied_indices = np.where(self.H_eigval <= fermi_energy)[0]
         
         if len(occupied_indices) == 0:
-            return np.zeros_like(self.H)
+            self.P =  np.zeros(self.H.shape, dtype=complex)
         
         # Create projection operator
-        projector = np.zeros_like(self.H, dtype=complex)
+        projector = np.zeros(self.H.shape, dtype=complex)
         for idx in occupied_indices:
             v = self.H_eigvec[:, idx]
             projector += np.outer(v, v.conj())
         
-        self.P =  (ac/(2*np.pi)) * projector
+        self.P =   projector
 
-    def calculate_local_chern_marker(self, ac=3/(2*np.sqrt(3)), fermi_energy=0):
+    def calculate_local_chern_marker(self, ac=3/(2*np.sqrt(3)), fermi_energy=0) -> np.ndarray:
     # Calculate Chern marker
         mat_size = self.L * self.L * 2
         if self.P is None:
@@ -739,28 +741,46 @@ class TwoDimensionalHaldane(Model):
                 sum(c_mat[site, site] for site in unit_cell_sites)
             )
         
-        # Sample from center region
-        center_width = self.L // 4
-        center_length = self.L // 4
-        center_x = self.L // 2
-        center_y = self.L // 2
+        # # Sample from center region
+        # center_width = self.L // 4
+        # center_length = self.L // 4
+        # center_x = self.L // 2
+        # center_y = self.L // 2
         
         # Reshape to 2D for sampling from center
         chern_marker_reshaped = chern_marker_per_unit_cell.reshape(self.L, self.L)
         
-        # Calculate average over center region
-        center_values = []
-        for x in range(center_x - center_width, center_x + center_width + 1):
-            for y in range(center_y - center_length, center_y + center_length + 1):
-                if 0 <= x < self.L and 0 <= y < self.L:
-                    center_values.append(chern_marker_reshaped[x, y])
+        # # Calculate average over center region
+        # center_values = []
+        # for x in range(center_x - center_width, center_x + center_width + 1):
+        #     for y in range(center_y - center_length, center_y + center_length + 1):
+        #         if 0 <= x < self.L and 0 <= y < self.L:
+        #             center_values.append(chern_marker_reshaped[x, y])
         
-        chern_value = np.mean(center_values)
+        # chern_value = np.mean(center_values)
 
-        return chern_value
+        return chern_marker_reshaped
 
-    def create_localiser(self):
-        pass
+    def create_localiser(self, e0=0, x0=0, y0=0):
+        kappa = self.kappa
+        X = self.X
+        H = self.H
+        # 2D spectral localiser as defined in arxiv 2411.0351
+        localiser = sp.bmat([ 
+            [H - e0 * sp.eye(H.shape[0]), kappa * (X[0] - x0 * sp.eye(H.shape[0])) - 1j * kappa * (X[1] - y0 * sp.eye(H.shape[0]))],
+            [kappa * (X[0] - x0 * sp.eye(H.shape[0])) + 1j *kappa *  (X[1] - y0 * sp.eye(H.shape[0])), - (H - e0 * sp.eye(H.shape[0]))]
+        ], format='csr')
+        
+        return localiser
+    
+    def calculate_specral_localiser_chern_marker(self):
+        if self.spectral_localiser_eigval is None or self.spectral_localiser_eigvec is None:
+            self.find_eigval(self.spectral_localiser, sparse=False)
+        # Calculate Signatore of the spectral localiser
+        sig = np.sum(self.spectral_localiser_eigval > 0) - np.sum(self.spectral_localiser_eigval < 0)
+        chern_marker = sig / 2
+        return chern_marker
+
 
 class ThreeDimensionalLiebModel(Model):
     def __init__(self, L, disorder, rho, kappa, X=None):
@@ -883,18 +903,6 @@ class ThreeDimensionalTopologicalChiralInsulator(Model):
 
     def create_localiser(self):
         pass
-
-
-class TwoDimensionalHaldane(Model):
-    def create_hamiltonian(self):
-        pass
-
-    def create_position_operator(self):
-        pass
-
-    def create_localiser(self):
-        pass
-
 
 
 
