@@ -11,7 +11,7 @@ cat > job3dAnderson.sh << "EOF"
 #SBATCH --account=su007-rr
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=138
+#SBATCH --cpus-per-task=84
 #SBATCH --mem-per-cpu=3850
 #SBATCH --time=48:00:00
 

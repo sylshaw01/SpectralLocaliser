@@ -804,17 +804,7 @@ class ThreeDimensionalLiebModel(Model):
 class ThreeDimensionalAnderson(Model):
 
 
-    def __init__(self, L, disorder, rho, kappa, X=None):
-        # Initialize all attributes directly without calling parent __init__
-        self.L = L
-        self.disorder = disorder
-        self.rho = rho
-        self.kappa = kappa
-        
-        # Create position operators (list of 3) and other operators
-        self.X = X if X is not None else self.create_position_operator()
-        self.H = self.create_hamiltonian()
-        self.SL = self.create_localiser()
+    
 
     def create_hamiltonian(self):
         N = self.L**3
