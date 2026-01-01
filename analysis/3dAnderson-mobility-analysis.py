@@ -117,12 +117,16 @@ def find_data_files(data_dir, L=None):
         basename = os.path.basename(filepath)
         if basename.endswith('_H_eigval.dat'):
             data_files[file_L]['files']['H_eigval'] = filepath
+        elif basename.endswith('_H_eigvec.dat'):
+            data_files[file_L]['files']['H_eigvec'] = filepath
         elif basename.endswith('_H_IPR.dat'):
-            data_files[file_L]['files']['H_IPR'] = filepath
+            data_files[file_L]['files']['H_IPR'] = filepath  # May not be used if incorrect
         elif basename.endswith('_spectral_localiser_eigval.dat'):
             data_files[file_L]['files']['SL_eigval'] = filepath
+        elif basename.endswith('_spectral_localiser_eigvec.dat'):
+            data_files[file_L]['files']['SL_eigvec'] = filepath
         elif basename.endswith('_spectral_localiser_IPR.dat'):
-            data_files[file_L]['files']['SL_IPR'] = filepath
+            data_files[file_L]['files']['SL_IPR'] = filepath  # May not be used if incorrect
         elif basename.endswith('_parameters.txt'):
             data_files[file_L]['files']['parameters'] = filepath
         elif basename.endswith('_seeds.dat'):
@@ -142,17 +146,38 @@ def load_parameters(param_file):
     return params
 
 
+def compute_ipr(eigvec):
+    """
+    Compute the Inverse Participation Ratio (IPR) for eigenvectors.
+
+    IPR = sum(|psi_i|^4)
+
+    For a fully delocalized state: IPR ~ 1/N
+    For a fully localized state: IPR ~ 1
+
+    Args:
+        eigvec: array of shape (..., N) where last dimension is the eigenvector components
+                or shape (..., N, M) where M is number of eigenvectors
+
+    Returns:
+        IPR values with shape matching input minus the eigenvector dimension
+    """
+    # IPR = sum of |psi|^4
+    return np.sum(np.abs(eigvec) ** 4, axis=-1)
+
+
 def load_data(data_files_dict, L):
     """
     Load all data for a given system size L.
 
     Returns dict with:
-        - H_eigval: array of shape (num_disorder, num_realizations, L^3)
-        - H_IPR: array of shape (num_disorder, num_realizations, L^3)
-        - SL_eigval: array of shape (num_disorder, num_realizations, 4*L^3)
-        - SL_IPR: array of shape (num_disorder, num_realizations, 4*L^3)
+        - H_eigval: array of shape (num_disorder, num_realizations, num_eigs)
+        - H_eigvec: array of shape (num_disorder, num_realizations, L^3, num_eigs) [if available]
+        - SL_eigval: array of shape (num_disorder, num_realizations, num_eigs_sl)
+        - SL_eigvec: array of shape (num_disorder, num_realizations, 4*L^3, num_eigs_sl) [if available]
         - disorder_values: 1D array of disorder strengths
         - params: dict of parameters
+        - has_eigvec: bool indicating if eigenvectors are available
     """
     if L not in data_files_dict:
         raise ValueError(f"No data found for L={L}")
@@ -173,38 +198,81 @@ def load_data(data_files_dict, L):
     disorder_start = params.get('disorder_start', 0.0)
     disorder_end = params.get('disorder_end', 30.0)
     num_realizations = params.get('num_realizations', 5)
+    num_eigs = params.get('num_eigs', L**3)  # Default to full spectrum
 
-    # Calculate shapes
+    # Calculate sizes
     H_size = L ** 3
     SL_size = 4 * L ** 3
 
-    # Try to infer disorder_resolution from file size
+    # Try to infer disorder_resolution and num_eigs from file size
     if 'H_eigval' in files:
         file_size = os.path.getsize(files['H_eigval'])
-        expected_per_step = num_realizations * H_size * 8  # float64 = 8 bytes
-        disorder_resolution = file_size // expected_per_step
+        # float64 = 8 bytes, shape is (disorder_resolution, num_realizations, num_eigs)
+        total_elements = file_size // 8
+        # We know num_realizations, so: total = disorder_resolution * num_realizations * num_eigs
+        # For full spectrum: num_eigs = H_size = L^3
+        # Try to infer both
+        if total_elements % (num_realizations * H_size) == 0:
+            disorder_resolution = total_elements // (num_realizations * H_size)
+            num_eigs_H = H_size
+        else:
+            # num_eigs might be different from H_size (sparse solver case)
+            # Try common values
+            for dr in range(1, 100):
+                if total_elements % (dr * num_realizations) == 0:
+                    possible_num_eigs = total_elements // (dr * num_realizations)
+                    if possible_num_eigs <= H_size:
+                        disorder_resolution = dr
+                        num_eigs_H = possible_num_eigs
+                        break
+            else:
+                num_eigs_H = H_size
+    else:
+        num_eigs_H = H_size
 
-    shape_H = (disorder_resolution, num_realizations, H_size)
-    shape_SL = (disorder_resolution, num_realizations, SL_size)
+    # Infer SL num_eigs similarly
+    if 'SL_eigval' in files:
+        file_size = os.path.getsize(files['SL_eigval'])
+        total_elements = file_size // 8
+        num_eigs_SL = total_elements // (disorder_resolution * num_realizations)
+    else:
+        num_eigs_SL = SL_size
+
+    shape_H_eigval = (disorder_resolution, num_realizations, num_eigs_H)
+    shape_SL_eigval = (disorder_resolution, num_realizations, num_eigs_SL)
+
+    # Eigenvector shapes: (disorder, realizations, basis_size, num_eigs)
+    shape_H_eigvec = (disorder_resolution, num_realizations, H_size, H_size)
+    shape_SL_eigvec = (disorder_resolution, num_realizations, SL_size, SL_size)
 
     data = {
         'params': params,
         'disorder_values': np.linspace(disorder_start, disorder_end, disorder_resolution),
-        'L': L
+        'L': L,
+        'has_eigvec': False
     }
 
-    # Load memmap arrays
+    # Load memmap arrays for eigenvalues
     if 'H_eigval' in files:
-        data['H_eigval'] = np.memmap(files['H_eigval'], dtype='float64', mode='r', shape=shape_H)
-
-    if 'H_IPR' in files:
-        data['H_IPR'] = np.memmap(files['H_IPR'], dtype='float64', mode='r', shape=shape_H)
+        data['H_eigval'] = np.memmap(files['H_eigval'], dtype='float64', mode='r', shape=shape_H_eigval)
+        print(f"  Loaded H_eigval: shape {shape_H_eigval}")
 
     if 'SL_eigval' in files:
-        data['SL_eigval'] = np.memmap(files['SL_eigval'], dtype='float64', mode='r', shape=shape_SL)
+        data['SL_eigval'] = np.memmap(files['SL_eigval'], dtype='float64', mode='r', shape=shape_SL_eigval)
+        print(f"  Loaded SL_eigval: shape {shape_SL_eigval}")
 
-    if 'SL_IPR' in files:
-        data['SL_IPR'] = np.memmap(files['SL_IPR'], dtype='float64', mode='r', shape=shape_SL)
+    # Load eigenvectors if available (needed for IPR calculation)
+    if 'H_eigvec' in files:
+        data['H_eigvec'] = np.memmap(files['H_eigvec'], dtype='complex128', mode='r', shape=shape_H_eigvec)
+        data['has_eigvec'] = True
+        print(f"  Loaded H_eigvec: shape {shape_H_eigvec}")
+
+    if 'SL_eigvec' in files:
+        data['SL_eigvec'] = np.memmap(files['SL_eigvec'], dtype='complex128', mode='r', shape=shape_SL_eigvec)
+        print(f"  Loaded SL_eigvec: shape {shape_SL_eigvec}")
+
+    # Note: IPR will be computed on-the-fly from eigenvectors, not loaded from files
+    # The pre-computed IPR files were not stored correctly
 
     return data
 
@@ -350,6 +418,11 @@ def plot_dos_ipr_summary(data, disorder_idx, realization_idx=0, save_path=None):
     - Row 0: Hamiltonian
     - Row 1: Spectral Localizer
     """
+    if not data.get('has_eigvec', False):
+        print("Warning: Eigenvector data not available. Cannot compute IPR.")
+        print("Make sure eigenvector files (*_eigvec.dat) are present.")
+        return None, None
+
     fig, axs = plt.subplots(2, 3, figsize=FIGSIZE_2x3, constrained_layout=True)
 
     L = data['L']
@@ -357,9 +430,17 @@ def plot_dos_ipr_summary(data, disorder_idx, realization_idx=0, save_path=None):
 
     # Get data for this disorder and realization
     H_eigval = data['H_eigval'][disorder_idx, realization_idx]
-    H_IPR = data['H_IPR'][disorder_idx, realization_idx]
     SL_eigval = data['SL_eigval'][disorder_idx, realization_idx]
-    SL_IPR = data['SL_IPR'][disorder_idx, realization_idx]
+
+    # Get eigenvectors and compute IPR on-the-fly
+    # Eigenvector shape: (basis_size, num_eigs) - each column is an eigenvector
+    H_eigvec = data['H_eigvec'][disorder_idx, realization_idx]  # shape: (L^3, L^3)
+    SL_eigvec = data['SL_eigvec'][disorder_idx, realization_idx]  # shape: (4*L^3, 4*L^3)
+
+    # Compute IPR: sum of |psi|^4 along the basis dimension (axis=0)
+    # Each column is an eigenvector, so we sum over rows
+    H_IPR = compute_ipr(H_eigvec.T)  # Transpose so each row is an eigenvector
+    SL_IPR = compute_ipr(SL_eigvec.T)
 
     # Column 0: DOS (horizontal histograms)
     axs[0, 0].hist(H_eigval, bins=100, density=True, orientation='horizontal',
@@ -441,6 +522,11 @@ def plot_energy_resolved_ipr(data, disorder_indices, save_path=None):
 
     Creates a 2xN grid showing IPR vs Energy for different disorder values.
     """
+    if not data.get('has_eigvec', False):
+        print("Warning: Eigenvector data not available. Cannot compute IPR.")
+        print("Make sure eigenvector files (*_eigvec.dat) are present.")
+        return None, None
+
     n_disorders = len(disorder_indices)
     fig, axs = plt.subplots(2, n_disorders, figsize=(6*n_disorders, 10), constrained_layout=True)
 
@@ -448,15 +534,31 @@ def plot_energy_resolved_ipr(data, disorder_indices, save_path=None):
         axs = axs.reshape(2, 1)
 
     L = data['L']
+    n_realizations = data['H_eigval'].shape[1]
 
     for col, d_idx in enumerate(disorder_indices):
         W = data['disorder_values'][d_idx]
 
-        # Aggregate over realizations
-        H_eigval = data['H_eigval'][d_idx].flatten()
-        H_IPR = data['H_IPR'][d_idx].flatten()
-        SL_eigval = data['SL_eigval'][d_idx].flatten()
-        SL_IPR = data['SL_IPR'][d_idx].flatten()
+        # Aggregate over realizations, computing IPR on-the-fly
+        H_eigval_list = []
+        H_IPR_list = []
+        SL_eigval_list = []
+        SL_IPR_list = []
+
+        for r_idx in range(n_realizations):
+            H_eigval_list.append(data['H_eigval'][d_idx, r_idx])
+            SL_eigval_list.append(data['SL_eigval'][d_idx, r_idx])
+
+            # Compute IPR from eigenvectors
+            H_eigvec = data['H_eigvec'][d_idx, r_idx]
+            SL_eigvec = data['SL_eigvec'][d_idx, r_idx]
+            H_IPR_list.append(compute_ipr(H_eigvec.T))
+            SL_IPR_list.append(compute_ipr(SL_eigvec.T))
+
+        H_eigval = np.concatenate(H_eigval_list)
+        H_IPR = np.concatenate(H_IPR_list)
+        SL_eigval = np.concatenate(SL_eigval_list)
+        SL_IPR = np.concatenate(SL_IPR_list)
 
         # Hamiltonian: IPR vs Energy
         axs[0, col].scatter(H_IPR, H_eigval, s=0.5, c=COLORS['H'], alpha=0.3)
@@ -487,11 +589,21 @@ def plot_mobility_edge_trajectory(all_data, ipr_threshold=None, save_path=None):
     """
     Plot mobility edge trajectory vs disorder for different system sizes (Figure 3).
     """
+    # Check if any data has eigenvectors
+    has_any_eigvec = any(d.get('has_eigvec', False) for d in all_data.values())
+    if not has_any_eigvec:
+        print("Warning: No eigenvector data available. Cannot compute mobility edge.")
+        return None, None
+
     fig, axs = plt.subplots(1, 2, figsize=(14, 6), constrained_layout=True)
 
     colors_L = plt.cm.viridis(np.linspace(0.2, 0.8, len(all_data)))
 
     for (L, data), color in zip(sorted(all_data.items()), colors_L):
+        if not data.get('has_eigvec', False):
+            print(f"Skipping L={L}: no eigenvector data")
+            continue
+
         disorder_values = data['disorder_values']
         n_disorder = len(disorder_values)
         n_realizations = data['H_eigval'].shape[1]
@@ -502,7 +614,9 @@ def plot_mobility_edge_trajectory(all_data, ipr_threshold=None, save_path=None):
         for d_idx in range(n_disorder):
             for r_idx in range(n_realizations):
                 H_eigval = data['H_eigval'][d_idx, r_idx]
-                H_IPR = data['H_IPR'][d_idx, r_idx]
+                # Compute IPR from eigenvectors
+                H_eigvec = data['H_eigvec'][d_idx, r_idx]
+                H_IPR = compute_ipr(H_eigvec.T)
 
                 threshold = ipr_threshold if ipr_threshold else 2.0 / len(H_eigval)
                 Ec_l, Ec_u, _, _ = extract_mobility_edge(H_eigval, H_IPR, ipr_threshold=threshold)
@@ -550,6 +664,11 @@ def plot_filtered_rz_statistics(data, ipr_threshold=None, save_path=None):
 
     Uses H's mobility edge E_c to filter both H and SL eigenvalues.
     """
+    if not data.get('has_eigvec', False):
+        print("Warning: Eigenvector data not available. Cannot compute IPR for mobility edge.")
+        print("Make sure eigenvector files (*_eigvec.dat) are present.")
+        return None, None
+
     fig, axs = plt.subplots(2, 2, figsize=FIGSIZE_2x2, constrained_layout=True)
 
     L = data['L']
@@ -566,8 +685,11 @@ def plot_filtered_rz_statistics(data, ipr_threshold=None, save_path=None):
     for d_idx in range(n_disorder):
         for r_idx in range(n_realizations):
             H_eigval = data['H_eigval'][d_idx, r_idx]
-            H_IPR = data['H_IPR'][d_idx, r_idx]
             SL_eigval = data['SL_eigval'][d_idx, r_idx]
+
+            # Compute IPR from eigenvectors
+            H_eigvec = data['H_eigvec'][d_idx, r_idx]
+            H_IPR = compute_ipr(H_eigvec.T)
 
             # Extract mobility edge from H
             threshold = ipr_threshold if ipr_threshold else 2.0 / len(H_eigval)
@@ -707,6 +829,12 @@ def main():
         if L in data_files:
             print(f"Loading data for L={L}...")
             all_data[L] = load_data(data_files, L)
+
+            # Check for eigenvector availability
+            if not all_data[L].get('has_eigvec', False):
+                print(f"  WARNING: No eigenvector files found for L={L}")
+                print(f"           IPR will need to be computed from eigenvectors.")
+                print(f"           Looking for: *_H_eigvec.dat, *_spectral_localiser_eigvec.dat")
 
     # Generate timestamp for filenames
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
