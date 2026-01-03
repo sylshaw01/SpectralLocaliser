@@ -27,6 +27,9 @@ from datetime import datetime
 DATA_DIR = '../data/'
 FIGURE_DIR = '../figures/'
 
+# Set to True to compute IPR from eigenvectors, False to skip IPR-dependent plots
+COMPUTE_IPR = True
+
 # Plot style constants (matching notebooks/recentdata.ipynb)
 COLORS = {'H': 'blue', 'SL': 'orange'}
 FIGSIZE_2x3 = (18, 10)
@@ -411,20 +414,13 @@ def plot_dos_ipr_summary(data, disorder_idx, realization_idx=0, save_path=None):
     """
     Plot DOS and IPR summary for a single disorder value (Figure 1 style).
 
-    Creates a 2x3 grid:
+    Creates a 2x3 grid (or 2x2 if IPR not available):
     - Col 0: DOS (horizontal histogram)
     - Col 1: Eigenvalues vs Index
-    - Col 2: IPR vs Index
+    - Col 2: IPR vs Index (only if COMPUTE_IPR=True)
     - Row 0: Hamiltonian
     - Row 1: Spectral Localizer
     """
-    if not data.get('has_eigvec', False):
-        print("Warning: Eigenvector data not available. Cannot compute IPR.")
-        print("Make sure eigenvector files (*_eigvec.dat) are present.")
-        return None, None
-
-    fig, axs = plt.subplots(2, 3, figsize=FIGSIZE_2x3, constrained_layout=True)
-
     L = data['L']
     W = data['disorder_values'][disorder_idx]
 
@@ -432,15 +428,22 @@ def plot_dos_ipr_summary(data, disorder_idx, realization_idx=0, save_path=None):
     H_eigval = data['H_eigval'][disorder_idx, realization_idx]
     SL_eigval = data['SL_eigval'][disorder_idx, realization_idx]
 
-    # Get eigenvectors and compute IPR on-the-fly
-    # Eigenvector shape: (basis_size, num_eigs) - each column is an eigenvector
-    H_eigvec = data['H_eigvec'][disorder_idx, realization_idx]  # shape: (L^3, L^3)
-    SL_eigvec = data['SL_eigvec'][disorder_idx, realization_idx]  # shape: (4*L^3, 4*L^3)
+    # Check if we should compute IPR
+    compute_ipr_flag = COMPUTE_IPR and data.get('has_eigvec', False)
 
-    # Compute IPR: sum of |psi|^4 along the basis dimension (axis=0)
-    # Each column is an eigenvector, so we sum over rows
-    H_IPR = compute_ipr(H_eigvec.T)  # Transpose so each row is an eigenvector
-    SL_IPR = compute_ipr(SL_eigvec.T)
+    if compute_ipr_flag:
+        fig, axs = plt.subplots(2, 3, figsize=FIGSIZE_2x3, constrained_layout=True)
+
+        # Get eigenvectors and compute IPR on-the-fly
+        H_eigvec = data['H_eigvec'][disorder_idx, realization_idx]
+        SL_eigvec = data['SL_eigvec'][disorder_idx, realization_idx]
+        H_IPR = compute_ipr(H_eigvec.T)
+        SL_IPR = compute_ipr(SL_eigvec.T)
+    else:
+        # 2x2 grid without IPR
+        fig, axs = plt.subplots(2, 2, figsize=(12, 10), constrained_layout=True)
+        H_IPR = None
+        SL_IPR = None
 
     # Column 0: DOS (horizontal histograms)
     axs[0, 0].hist(H_eigval, bins=100, density=True, orientation='horizontal',
@@ -477,37 +480,40 @@ def plot_dos_ipr_summary(data, disorder_idx, realization_idx=0, save_path=None):
     axs[1, 1].grid(True)
     axs[1, 1].set_axisbelow(True)
 
-    # Column 2: IPR vs Index
-    # Sort eigenvalues and reorder IPR accordingly
-    H_sort_idx = np.argsort(H_eigval)
-    SL_sort_idx = np.argsort(SL_eigval)
+    # Column 2: IPR vs Index (only if computing IPR)
+    if compute_ipr_flag and H_IPR is not None:
+        # Sort eigenvalues and reorder IPR accordingly
+        H_sort_idx = np.argsort(H_eigval)
+        SL_sort_idx = np.argsort(SL_eigval)
 
-    axs[0, 2].scatter(H_indices, H_IPR[H_sort_idx], s=1, c=COLORS['H'], alpha=0.5)
-    axs[0, 2].set_title('Hamiltonian IPR', size=TITLE_SIZE)
-    axs[0, 2].set_xlabel('Index', size=LABEL_SIZE)
-    axs[0, 2].set_ylabel('IPR', size=LABEL_SIZE)
-    axs[0, 2].grid(True)
-    axs[0, 2].set_axisbelow(True)
+        axs[0, 2].scatter(H_indices, H_IPR[H_sort_idx], s=1, c=COLORS['H'], alpha=0.5)
+        axs[0, 2].set_title('Hamiltonian IPR', size=TITLE_SIZE)
+        axs[0, 2].set_xlabel('Index', size=LABEL_SIZE)
+        axs[0, 2].set_ylabel('IPR', size=LABEL_SIZE)
+        axs[0, 2].grid(True)
+        axs[0, 2].set_axisbelow(True)
 
-    # Add average IPR annotation
-    avg_H_IPR = np.mean(H_IPR)
-    axs[0, 2].text(0.95, 0.95, f'ave={avg_H_IPR:.4f}', transform=axs[0, 2].transAxes,
-                   fontsize=14, verticalalignment='top', horizontalalignment='right',
-                   bbox=ANNOTATION_PROPS)
+        # Add average IPR annotation
+        avg_H_IPR = np.mean(H_IPR)
+        axs[0, 2].text(0.95, 0.95, f'ave={avg_H_IPR:.4f}', transform=axs[0, 2].transAxes,
+                       fontsize=14, verticalalignment='top', horizontalalignment='right',
+                       bbox=ANNOTATION_PROPS)
 
-    axs[1, 2].scatter(SL_indices, SL_IPR[SL_sort_idx], s=1, c=COLORS['SL'], alpha=0.5)
-    axs[1, 2].set_title('Spectral Localiser IPR', size=TITLE_SIZE)
-    axs[1, 2].set_xlabel('Index', size=LABEL_SIZE)
-    axs[1, 2].set_ylabel('IPR', size=LABEL_SIZE)
-    axs[1, 2].grid(True)
-    axs[1, 2].set_axisbelow(True)
+        axs[1, 2].scatter(SL_indices, SL_IPR[SL_sort_idx], s=1, c=COLORS['SL'], alpha=0.5)
+        axs[1, 2].set_title('Spectral Localiser IPR', size=TITLE_SIZE)
+        axs[1, 2].set_xlabel('Index', size=LABEL_SIZE)
+        axs[1, 2].set_ylabel('IPR', size=LABEL_SIZE)
+        axs[1, 2].grid(True)
+        axs[1, 2].set_axisbelow(True)
 
-    avg_SL_IPR = np.mean(SL_IPR)
-    axs[1, 2].text(0.95, 0.95, f'ave={avg_SL_IPR:.4f}', transform=axs[1, 2].transAxes,
-                   fontsize=14, verticalalignment='top', horizontalalignment='right',
-                   bbox=ANNOTATION_PROPS)
+        avg_SL_IPR = np.mean(SL_IPR)
+        axs[1, 2].text(0.95, 0.95, f'ave={avg_SL_IPR:.4f}', transform=axs[1, 2].transAxes,
+                       fontsize=14, verticalalignment='top', horizontalalignment='right',
+                       bbox=ANNOTATION_PROPS)
 
-    fig.suptitle(f'DOS and IPR at Disorder W={W:.2f}, L={L}', fontsize=SUPTITLE_SIZE)
+        fig.suptitle(f'DOS and IPR at Disorder W={W:.2f}, L={L}', fontsize=SUPTITLE_SIZE)
+    else:
+        fig.suptitle(f'DOS and Eigenvalues at Disorder W={W:.2f}, L={L}', fontsize=SUPTITLE_SIZE)
 
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
@@ -522,6 +528,10 @@ def plot_energy_resolved_ipr(data, disorder_indices, save_path=None):
 
     Creates a 2xN grid showing IPR vs Energy for different disorder values.
     """
+    if not COMPUTE_IPR:
+        print("Skipping energy-resolved IPR plot (COMPUTE_IPR=False)")
+        return None, None
+
     if not data.get('has_eigvec', False):
         print("Warning: Eigenvector data not available. Cannot compute IPR.")
         print("Make sure eigenvector files (*_eigvec.dat) are present.")
@@ -589,6 +599,10 @@ def plot_mobility_edge_trajectory(all_data, ipr_threshold=None, save_path=None):
     """
     Plot mobility edge trajectory vs disorder for different system sizes (Figure 3).
     """
+    if not COMPUTE_IPR:
+        print("Skipping mobility edge trajectory plot (COMPUTE_IPR=False)")
+        return None, None
+
     # Check if any data has eigenvectors
     has_any_eigvec = any(d.get('has_eigvec', False) for d in all_data.values())
     if not has_any_eigvec:
@@ -663,7 +677,13 @@ def plot_filtered_rz_statistics(data, ipr_threshold=None, save_path=None):
     Plot r and z statistics filtered by the mobility edge energy window (Figure 4).
 
     Uses H's mobility edge E_c to filter both H and SL eigenvalues.
+    Requires COMPUTE_IPR=True to determine mobility edge.
     """
+    if not COMPUTE_IPR:
+        print("Skipping filtered r/z statistics plot (COMPUTE_IPR=False)")
+        print("Note: This plot requires mobility edge from IPR. Consider plot_rz_statistics_unfiltered() instead.")
+        return None, None
+
     if not data.get('has_eigvec', False):
         print("Warning: Eigenvector data not available. Cannot compute IPR for mobility edge.")
         print("Make sure eigenvector files (*_eigvec.dat) are present.")
@@ -780,6 +800,101 @@ def plot_filtered_rz_statistics(data, ipr_threshold=None, save_path=None):
     return fig, axs
 
 
+def plot_rz_statistics_unfiltered(data, save_path=None):
+    """
+    Plot r and z statistics WITHOUT mobility edge filtering.
+
+    Uses all eigenvalues (no IPR-based filtering).
+    This is the fallback when COMPUTE_IPR=False.
+    """
+    fig, axs = plt.subplots(2, 2, figsize=FIGSIZE_2x2, constrained_layout=True)
+
+    L = data['L']
+    disorder_values = data['disorder_values']
+    n_disorder = len(disorder_values)
+    n_realizations = data['H_eigval'].shape[1]
+
+    # Arrays to store results
+    H_r_vals = np.zeros((n_disorder, n_realizations))
+    H_z_vals = np.zeros((n_disorder, n_realizations))
+    SL_r_vals = np.zeros((n_disorder, n_realizations))
+    SL_z_vals = np.zeros((n_disorder, n_realizations))
+
+    for d_idx in range(n_disorder):
+        for r_idx in range(n_realizations):
+            H_eigval = data['H_eigval'][d_idx, r_idx]
+            SL_eigval = data['SL_eigval'][d_idx, r_idx]
+
+            # Calculate r and z for ALL eigenvalues (no filtering)
+            H_r_vals[d_idx, r_idx] = calculate_r(H_eigval)
+            H_z_vals[d_idx, r_idx] = calculate_z(H_eigval)
+            SL_r_vals[d_idx, r_idx] = calculate_r(SL_eigval)
+            SL_z_vals[d_idx, r_idx] = calculate_z(SL_eigval)
+
+    # Compute means and standard errors
+    H_r_mean = np.nanmean(H_r_vals, axis=1)
+    H_r_std = np.nanstd(H_r_vals, axis=1) / np.sqrt(n_realizations)
+    H_z_mean = np.nanmean(H_z_vals, axis=1)
+    H_z_std = np.nanstd(H_z_vals, axis=1) / np.sqrt(n_realizations)
+
+    SL_r_mean = np.nanmean(SL_r_vals, axis=1)
+    SL_r_std = np.nanstd(SL_r_vals, axis=1) / np.sqrt(n_realizations)
+    SL_z_mean = np.nanmean(SL_z_vals, axis=1)
+    SL_z_std = np.nanstd(SL_z_vals, axis=1) / np.sqrt(n_realizations)
+
+    # Plot H r-statistic
+    axs[0, 0].errorbar(disorder_values, H_r_mean, yerr=H_r_std,
+                        label=f'L={L}', marker='o', capsize=3, color=COLORS['H'])
+    axs[0, 0].axhline(y=GOE_R, color='red', linestyle='--', label='GOE', alpha=0.7)
+    axs[0, 0].axhline(y=POISSON_R, color='green', linestyle='--', label='Poisson', alpha=0.7)
+    axs[0, 0].set_title('Hamiltonian <r>', size=TITLE_SIZE)
+    axs[0, 0].set_xlabel('Disorder Strength W', size=LABEL_SIZE)
+    axs[0, 0].set_ylabel('<r>', size=LABEL_SIZE)
+    axs[0, 0].legend()
+    axs[0, 0].grid(True)
+
+    # Plot H z-statistic
+    axs[0, 1].errorbar(disorder_values, H_z_mean, yerr=H_z_std,
+                        label=f'L={L}', marker='o', capsize=3, color=COLORS['H'])
+    axs[0, 1].axhline(y=GOE_Z, color='red', linestyle='--', label='GOE', alpha=0.7)
+    axs[0, 1].axhline(y=POISSON_Z, color='green', linestyle='--', label='Poisson', alpha=0.7)
+    axs[0, 1].set_title('Hamiltonian <z>', size=TITLE_SIZE)
+    axs[0, 1].set_xlabel('Disorder Strength W', size=LABEL_SIZE)
+    axs[0, 1].set_ylabel('<z>', size=LABEL_SIZE)
+    axs[0, 1].legend()
+    axs[0, 1].grid(True)
+
+    # Plot SL r-statistic
+    axs[1, 0].errorbar(disorder_values, SL_r_mean, yerr=SL_r_std,
+                        label=f'L={L}', marker='o', capsize=3, color=COLORS['SL'])
+    axs[1, 0].axhline(y=GOE_R, color='red', linestyle='--', label='GOE', alpha=0.7)
+    axs[1, 0].axhline(y=POISSON_R, color='green', linestyle='--', label='Poisson', alpha=0.7)
+    axs[1, 0].set_title('Spectral Localizer <r>', size=TITLE_SIZE)
+    axs[1, 0].set_xlabel('Disorder Strength W', size=LABEL_SIZE)
+    axs[1, 0].set_ylabel('<r>', size=LABEL_SIZE)
+    axs[1, 0].legend()
+    axs[1, 0].grid(True)
+
+    # Plot SL z-statistic
+    axs[1, 1].errorbar(disorder_values, SL_z_mean, yerr=SL_z_std,
+                        label=f'L={L}', marker='o', capsize=3, color=COLORS['SL'])
+    axs[1, 1].axhline(y=GOE_Z, color='red', linestyle='--', label='GOE', alpha=0.7)
+    axs[1, 1].axhline(y=POISSON_Z, color='green', linestyle='--', label='Poisson', alpha=0.7)
+    axs[1, 1].set_title('Spectral Localizer <z>', size=TITLE_SIZE)
+    axs[1, 1].set_xlabel('Disorder Strength W', size=LABEL_SIZE)
+    axs[1, 1].set_ylabel('<z>', size=LABEL_SIZE)
+    axs[1, 1].legend()
+    axs[1, 1].grid(True)
+
+    fig.suptitle(f'Spectral Statistics (all eigenvalues), L={L}', fontsize=SUPTITLE_SIZE)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Saved: {save_path}")
+
+    return fig, axs
+
+
 # ============================================================================
 # MAIN
 # ============================================================================
@@ -856,16 +971,21 @@ def main():
             save_path = os.path.join(figure_dir, f'3dAnderson_L{L}_W{data["disorder_values"][d_idx]:.1f}_dos_ipr_{timestamp}.png')
             plot_dos_ipr_summary(data, d_idx, save_path=save_path)
 
-        # Figure 2: Energy-resolved IPR
-        save_path = os.path.join(figure_dir, f'3dAnderson_L{L}_energy_resolved_ipr_{timestamp}.png')
-        plot_energy_resolved_ipr(data, disorder_indices, save_path=save_path)
+        # Figure 2: Energy-resolved IPR (only if COMPUTE_IPR=True)
+        if COMPUTE_IPR:
+            save_path = os.path.join(figure_dir, f'3dAnderson_L{L}_energy_resolved_ipr_{timestamp}.png')
+            plot_energy_resolved_ipr(data, disorder_indices, save_path=save_path)
 
-        # Figure 4: Filtered r/z statistics
-        save_path = os.path.join(figure_dir, f'3dAnderson_L{L}_filtered_rz_{timestamp}.png')
-        plot_filtered_rz_statistics(data, ipr_threshold=args.ipr_threshold, save_path=save_path)
+        # Figure 4: r/z statistics (filtered if COMPUTE_IPR=True, unfiltered otherwise)
+        if COMPUTE_IPR:
+            save_path = os.path.join(figure_dir, f'3dAnderson_L{L}_filtered_rz_{timestamp}.png')
+            plot_filtered_rz_statistics(data, ipr_threshold=args.ipr_threshold, save_path=save_path)
+        else:
+            save_path = os.path.join(figure_dir, f'3dAnderson_L{L}_rz_{timestamp}.png')
+            plot_rz_statistics_unfiltered(data, save_path=save_path)
 
-    # Figure 3: Mobility edge trajectory (comparing all L values)
-    if len(all_data) > 0:
+    # Figure 3: Mobility edge trajectory (comparing all L values, only if COMPUTE_IPR=True)
+    if COMPUTE_IPR and len(all_data) > 0:
         save_path = os.path.join(figure_dir, f'3dAnderson_mobility_edge_trajectory_{timestamp}.png')
         plot_mobility_edge_trajectory(all_data, ipr_threshold=args.ipr_threshold, save_path=save_path)
 
