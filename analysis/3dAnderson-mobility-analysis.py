@@ -30,6 +30,14 @@ FIGURE_DIR = '../figures/'
 # Set to True to compute IPR from eigenvectors, False to skip IPR-dependent plots
 COMPUTE_IPR = True
 
+# Disorder indices to plot (None = auto-select low/mid/high)
+# Examples: [0, 2, 5] for specific indices, or None for automatic selection
+DISORDER_INDICES = None
+
+# IPR percentile cutoff for energy-resolved plots (removes outliers)
+# e.g., 90 means show only the bottom 90% of IPR values
+IPR_PERCENTILE_CUTOFF = 90
+
 # Plot style constants (matching notebooks/recentdata.ipynb)
 COLORS = {'H': 'blue', 'SL': 'orange'}
 FIGSIZE_2x3 = (18, 10)
@@ -570,23 +578,30 @@ def plot_energy_resolved_ipr(data, disorder_indices, save_path=None):
         SL_eigval = np.concatenate(SL_eigval_list)
         SL_IPR = np.concatenate(SL_IPR_list)
 
-        # Hamiltonian: IPR vs Energy
-        axs[0, col].scatter(H_IPR, H_eigval, s=0.5, c=COLORS['H'], alpha=0.3)
+        # Apply percentile cutoff to remove outliers
+        H_ipr_cutoff = np.percentile(H_IPR, IPR_PERCENTILE_CUTOFF)
+        SL_ipr_cutoff = np.percentile(SL_IPR, IPR_PERCENTILE_CUTOFF)
+
+        H_mask = H_IPR <= H_ipr_cutoff
+        SL_mask = SL_IPR <= SL_ipr_cutoff
+
+        # Hamiltonian: Energy vs IPR (flipped axes)
+        axs[0, col].scatter(H_eigval[H_mask], H_IPR[H_mask], s=0.5, c=COLORS['H'], alpha=0.3)
         axs[0, col].set_title(f'H: W={W:.1f}', size=TITLE_SIZE)
-        axs[0, col].set_xlabel('IPR', size=LABEL_SIZE)
-        axs[0, col].set_ylabel('Energy (E)', size=LABEL_SIZE)
+        axs[0, col].set_xlabel('Energy (E)', size=LABEL_SIZE)
+        axs[0, col].set_ylabel('IPR', size=LABEL_SIZE)
         axs[0, col].grid(True)
         axs[0, col].set_axisbelow(True)
 
-        # Spectral Localizer: IPR vs Energy
-        axs[1, col].scatter(SL_IPR, SL_eigval, s=0.5, c=COLORS['SL'], alpha=0.3)
+        # Spectral Localizer: Energy vs IPR (flipped axes)
+        axs[1, col].scatter(SL_eigval[SL_mask], SL_IPR[SL_mask], s=0.5, c=COLORS['SL'], alpha=0.3)
         axs[1, col].set_title(f'SL: W={W:.1f}', size=TITLE_SIZE)
-        axs[1, col].set_xlabel('IPR', size=LABEL_SIZE)
-        axs[1, col].set_ylabel('Eigenvalue', size=LABEL_SIZE)
+        axs[1, col].set_xlabel('Eigenvalue', size=LABEL_SIZE)
+        axs[1, col].set_ylabel('IPR', size=LABEL_SIZE)
         axs[1, col].grid(True)
         axs[1, col].set_axisbelow(True)
 
-    fig.suptitle(f'Energy-Resolved IPR (Mobility Edge Visualization), L={L}', fontsize=SUPTITLE_SIZE)
+    fig.suptitle(f'Energy-Resolved IPR (bottom {IPR_PERCENTILE_CUTOFF}%), L={L}', fontsize=SUPTITLE_SIZE)
 
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
@@ -958,9 +973,11 @@ def main():
     for L, data in all_data.items():
         print(f"\nGenerating plots for L={L}...")
 
-        # Determine disorder indices to plot
+        # Determine disorder indices to plot (priority: command-line > config > auto)
         if args.disorder_indices:
             disorder_indices = args.disorder_indices
+        elif DISORDER_INDICES is not None:
+            disorder_indices = DISORDER_INDICES
         else:
             # Default: low, mid, high disorder
             n_disorder = len(data['disorder_values'])
