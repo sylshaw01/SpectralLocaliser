@@ -198,6 +198,7 @@ def load_data(data_files_dict, L):
     params = file_info['params']
 
     # Load parameters file if available
+    full_params = {}
     if 'parameters' in files:
         full_params = load_parameters(files['parameters'])
         # Get disorder resolution
@@ -206,9 +207,12 @@ def load_data(data_files_dict, L):
         # Infer from filename or use default
         disorder_resolution = 6  # Default, will be corrected below
 
-    disorder_start = params.get('disorder_start', 0.0)
-    disorder_end = params.get('disorder_end', 30.0)
-    num_realizations = params.get('num_realizations', 5)
+    # Get disorder range and realizations - prefer full_params (from parameters.txt),
+    # then params (from filename), then defaults
+    disorder_start = float(full_params.get('disorder_start', params.get('disorder_start', 0.0)))
+    disorder_end = float(full_params.get('disorder_end', params.get('disorder_end', 30.0)))
+    num_realizations = int(full_params.get('num_disorder_realisations',
+                          params.get('num_realizations', 5)))
     num_eigs = params.get('num_eigs', L**3)  # Default to full spectrum
 
     # Calculate sizes
