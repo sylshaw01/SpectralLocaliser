@@ -810,7 +810,7 @@ class ThreeDimensionalAnderson(Model):
         N = self.L**3
         L = self.L
 
-
+        t = -1.0
 
         # L = 3 example
         
@@ -825,7 +825,7 @@ class ThreeDimensionalAnderson(Model):
         # Create off-diagonals for hopping terms
         # Hopping in x-direction
         # make a fully one off-diagonal
-        off_diag_x = np.ones(N - 1)
+        off_diag_x = t * np.ones(N - 1)
         # then set to zero all of the elements at the far x edge
         off_diag_x[L-1::L] = 0 
 
@@ -836,10 +836,10 @@ class ThreeDimensionalAnderson(Model):
         y_coords = (np.arange(N-L) % (L*L)) // L
         mask_y = (y_coords == L-1)
         # Hopping in y-direction
-        off_diag_y = np.ones(N - L)
+        off_diag_y = t * np.ones(N - L)
         off_diag_y[mask_y] = 0 
         # z is easy because we don't have to worry about edges
-        off_diag_z = np.ones(N - L*L)
+        off_diag_z = t * np.ones(N - L*L)
 
         H = sp.diags(
             [
