@@ -1,0 +1,11 @@
+L=10
+num_disorder_realisations = 1000
+rho = 5.0
+kappa = 0.1
+disorder_start = 0.0
+disorder_end =  5.0
+disorder_resolution =  51
+num_eigenvalues =  600
+seed = 99
+t1 = 1.0
+M = 1.0
