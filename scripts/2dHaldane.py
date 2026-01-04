@@ -135,7 +135,11 @@ if __name__ == "__main__":
         for j, disorder in enumerate(disorder_values):
             print(f"   Disorder: {disorder}", flush=True)
             disorder_time = time.time()
-            kappa = (3 + disorder * 0.5)/ rho # Rough value which is appropriate for kappa, for the Haldane model
+            modelforkappa = TwoDimensionalHaldane(L,disorder,rho, kappa,X, t1, t2, M, phi)
+            modelforkappa.find_eigval(modelforkappa.H, num_eigval, sparse=sparse)
+            kappa = modelforkappa.H_eigval.max() / rho
+            
+            #kappa = (3 + disorder * 0.5)/ rho # Rough value which is appropriate for kappa, for the Haldane model
             args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,retevec, reteval,t1, t2, M, phi, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
