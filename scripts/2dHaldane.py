@@ -23,7 +23,8 @@ def single_iteration(args):
     # Unpack arguments
     L, rho, kappa, disorder, num_eigval, X, sparse,return_evec, return_eval, t1, t2, M, phi, i = args
     # Generate unique seed for reproducibility, using hashlib to avoid collisions
-    seed_str = f"{rho}_{disorder}_{num_eigval}_{i}_{kappa:.5f}_{L}"
+    time_of_day = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+    seed_str = f"{rho}_{disorder}_{num_eigval}_{i}_{kappa:.5f}_{L}_{time_of_day}"
     #seed = int(rho * 10e5) + int(disorder * 10e7) + int(num_eigval*10e4) + i OLD SEED GENERATION METHOD
     seed = int(hashlib.md5(seed_str.encode()).hexdigest(),16) % (2**32)
     np.random.seed(seed)
