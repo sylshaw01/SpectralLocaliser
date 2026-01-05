@@ -36,7 +36,7 @@ def single_iteration(args):
     spectral_localiser_eigvec = m.spectral_localiser_eigvec
     spectral_localiser_IPR = m.compute_IPR(m.spectral_localiser_eigvec)
     H_IPR = m.compute_IPR(m.H_eigvec)
-    if retevec:
+    if return_evec:
         return  H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, seed
     return  H_eigval, spectral_localiser_eigval,H_IPR, spectral_localiser_IPR,  seed
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     # Boolean flags to get eigenvalues and eigenvectors
     reteval = True
-    retevec = False
+    retevec = True
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     base_name = f"../data/3dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
@@ -130,7 +130,7 @@ if __name__ == "__main__":
             modelforkappa = ThreeDimensionalAnderson(L,disorder,rho=L//2,kappa=1.0)
             #Find largest eigenvalue to set kappa appropriately
             largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
-            kappa = largest_eigenvalue
+            kappa = largest_eigenvalue / rho
             args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,retevec, reteval, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
