@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     # Boolean flags to get eigenvalues and eigenvectors
     reteval = True
-    retevec = True
+    retevec = False
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     base_name = f"../data/3dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
