@@ -66,7 +66,7 @@ if __name__ == "__main__":
     num_disorder_realisations = int(parameters.get('num_disorder_realisations', 100))
 
     rho = float(parameters.get('rho', 30.0))
-    kappa = float(parameters.get('kappa', 0.1))
+    kappa_file = float(parameters.get('kappa', 0.1)) # IN THIS VERSION ONLY, KAPPA BECOMES SUCH THAT KAPPA * RHO = "kappa" *  |H|
     v = float(parameters.get('v', 1.0))
     w = float(parameters.get('w', 1.5))
     disorder_start = float(parameters.get('disorder_start', 0.0))
@@ -121,14 +121,16 @@ if __name__ == "__main__":
 
 
     with Pool(processes=cpu_count, maxtasksperchild=10) as pool:
-        modelToGetX =  OneDimensionalSSHBlockBasis(L,0,rho,kappa,v,w)
+        modelToGetX =  OneDimensionalSSHBlockBasis(L,0,rho,1,v,w)
         X = modelToGetX.X
         sparse = False
         num_eigval = num_eigenvalues
         for j, disorder in enumerate(disorder_values):
             print(f"   Disorder: {disorder}", flush=True)
             disorder_time = time.time()
-            kappa = (3 + disorder * 0.5)/ rho # Rough value which is appropriate for kappa, for the SSH model
+            modelforkappa = OneDimensionalSSHBlockBasis(L, disorder, rho, 1,v,w)
+            largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
+            kappa = kappa_file * (largest_eigenvalue/ rho) # Rough value which is appropriate for kappa, for the SSH model
             args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,retevec, reteval, v,w, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
