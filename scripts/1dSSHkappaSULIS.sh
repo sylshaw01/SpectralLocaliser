@@ -64,7 +64,7 @@ combined = f"""#!/usr/bin/env python3
 {SSH_code}
 """
 
-with open("1dSSH_combined.py", "w") as f:
+with open("1dSSHkappa_combined.py", "w") as f:
     f.write(combined)
 EOF
 
