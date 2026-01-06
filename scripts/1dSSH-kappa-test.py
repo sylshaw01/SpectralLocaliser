@@ -96,6 +96,8 @@ if __name__ == "__main__":
     print(f"Disorder from {disorder_start} to {disorder_end} with {disorder_resolution} steps")
     print(f"{num_disorder_realisations} disorder realizations per parameter set")
     print(f"Calculating {num_eigenvalues} eigenvalues per run")
+    print(f"Using kappa factor from file: {kappa_file}", flush=True)
+    print(f"Rho is: {rho}", flush=True)
     print("-"*50, flush=True)
 
 
@@ -131,6 +133,8 @@ if __name__ == "__main__":
             modelforkappa = OneDimensionalSSHBlockBasis(L, disorder, rho, 1,v,w)
             largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
             kappa = kappa_file * (largest_eigenvalue/ rho) # Rough value which is appropriate for kappa, for the SSH model
+            print(f"      |H| is approximately {largest_eigenvalue:.2f}", flush=True)
+            print(f"      Using kappa = {kappa:.2f}", flush=True)
             args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,retevec, reteval, v,w, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
