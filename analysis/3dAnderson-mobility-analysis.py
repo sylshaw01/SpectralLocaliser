@@ -184,11 +184,14 @@ def load_data(data_files_dict, L):
     Returns dict with:
         - H_eigval: array of shape (num_disorder, num_realizations, num_eigs)
         - H_eigvec: array of shape (num_disorder, num_realizations, L^3, num_eigs) [if available]
+        - H_IPR: array of shape (num_disorder, num_realizations, num_eigs) [if available]
         - SL_eigval: array of shape (num_disorder, num_realizations, num_eigs_sl)
         - SL_eigvec: array of shape (num_disorder, num_realizations, 4*L^3, num_eigs_sl) [if available]
+        - SL_IPR: array of shape (num_disorder, num_realizations, num_eigs_sl) [if available]
         - disorder_values: 1D array of disorder strengths
         - params: dict of parameters
         - has_eigvec: bool indicating if eigenvectors are available
+        - has_ipr: bool indicating if pre-computed IPR files are available
     """
     if L not in data_files_dict:
         raise ValueError(f"No data found for L={L}")
@@ -264,7 +267,8 @@ def load_data(data_files_dict, L):
         'params': params,
         'disorder_values': np.linspace(disorder_start, disorder_end, disorder_resolution),
         'L': L,
-        'has_eigvec': False
+        'has_eigvec': False,
+        'has_ipr': False
     }
 
     # Load memmap arrays for eigenvalues
@@ -286,8 +290,16 @@ def load_data(data_files_dict, L):
         data['SL_eigvec'] = np.memmap(files['SL_eigvec'], dtype='complex128', mode='r', shape=shape_SL_eigvec)
         print(f"  Loaded SL_eigvec: shape {shape_SL_eigvec}")
 
-    # Note: IPR will be computed on-the-fly from eigenvectors, not loaded from files
-    # The pre-computed IPR files were not stored correctly
+    # Load pre-computed IPR files if available
+    # IPR has same shape as eigenvalues: (disorder_resolution, num_realizations, num_eigs)
+    if 'H_IPR' in files:
+        data['H_IPR'] = np.memmap(files['H_IPR'], dtype='float64', mode='r', shape=shape_H_eigval)
+        data['has_ipr'] = True
+        print(f"  Loaded H_IPR: shape {shape_H_eigval}")
+
+    if 'SL_IPR' in files:
+        data['SL_IPR'] = np.memmap(files['SL_IPR'], dtype='float64', mode='r', shape=shape_SL_eigval)
+        print(f"  Loaded SL_IPR: shape {shape_SL_eigval}")
 
     return data
 
@@ -440,17 +452,24 @@ def plot_dos_ipr_summary(data, disorder_idx, realization_idx=0, save_path=None):
     H_eigval = data['H_eigval'][disorder_idx, realization_idx]
     SL_eigval = data['SL_eigval'][disorder_idx, realization_idx]
 
-    # Check if we should compute IPR
-    compute_ipr_flag = COMPUTE_IPR and data.get('has_eigvec', False)
+    # Check if we have IPR data available (either pre-computed or from eigenvectors)
+    has_precomputed_ipr = data.get('has_ipr', False)
+    has_eigvec = data.get('has_eigvec', False)
+    use_ipr = COMPUTE_IPR and (has_precomputed_ipr or has_eigvec)
 
-    if compute_ipr_flag:
+    if use_ipr:
         fig, axs = plt.subplots(2, 3, figsize=FIGSIZE_2x3, constrained_layout=True)
 
-        # Get eigenvectors and compute IPR on-the-fly
-        H_eigvec = data['H_eigvec'][disorder_idx, realization_idx]
-        SL_eigvec = data['SL_eigvec'][disorder_idx, realization_idx]
-        H_IPR = compute_ipr(H_eigvec.T)
-        SL_IPR = compute_ipr(SL_eigvec.T)
+        # Prefer pre-computed IPR, fall back to computing from eigenvectors
+        if has_precomputed_ipr:
+            H_IPR = data['H_IPR'][disorder_idx, realization_idx]
+            SL_IPR = data['SL_IPR'][disorder_idx, realization_idx]
+        else:
+            # Compute IPR from eigenvectors
+            H_eigvec = data['H_eigvec'][disorder_idx, realization_idx]
+            SL_eigvec = data['SL_eigvec'][disorder_idx, realization_idx]
+            H_IPR = compute_ipr(H_eigvec.T)
+            SL_IPR = compute_ipr(SL_eigvec.T)
     else:
         # 2x2 grid without IPR
         fig, axs = plt.subplots(2, 2, figsize=(12, 10), constrained_layout=True)
@@ -492,8 +511,8 @@ def plot_dos_ipr_summary(data, disorder_idx, realization_idx=0, save_path=None):
     axs[1, 1].grid(True)
     axs[1, 1].set_axisbelow(True)
 
-    # Column 2: IPR vs Index (only if computing IPR)
-    if compute_ipr_flag and H_IPR is not None:
+    # Column 2: IPR vs Index (only if IPR is available)
+    if use_ipr and H_IPR is not None:
         # Sort eigenvalues and reorder IPR accordingly
         H_sort_idx = np.argsort(H_eigval)
         SL_sort_idx = np.argsort(SL_eigval)
@@ -544,9 +563,12 @@ def plot_energy_resolved_ipr(data, disorder_indices, save_path=None):
         print("Skipping energy-resolved IPR plot (COMPUTE_IPR=False)")
         return None, None
 
-    if not data.get('has_eigvec', False):
-        print("Warning: Eigenvector data not available. Cannot compute IPR.")
-        print("Make sure eigenvector files (*_eigvec.dat) are present.")
+    has_precomputed_ipr = data.get('has_ipr', False)
+    has_eigvec = data.get('has_eigvec', False)
+
+    if not has_precomputed_ipr and not has_eigvec:
+        print("Warning: Neither pre-computed IPR nor eigenvector data available.")
+        print("Make sure IPR files (*_IPR.dat) or eigenvector files (*_eigvec.dat) are present.")
         return None, None
 
     n_disorders = len(disorder_indices)
@@ -561,7 +583,7 @@ def plot_energy_resolved_ipr(data, disorder_indices, save_path=None):
     for col, d_idx in enumerate(disorder_indices):
         W = data['disorder_values'][d_idx]
 
-        # Aggregate over realizations, computing IPR on-the-fly
+        # Aggregate over realizations
         H_eigval_list = []
         H_IPR_list = []
         SL_eigval_list = []
@@ -571,11 +593,15 @@ def plot_energy_resolved_ipr(data, disorder_indices, save_path=None):
             H_eigval_list.append(data['H_eigval'][d_idx, r_idx])
             SL_eigval_list.append(data['SL_eigval'][d_idx, r_idx])
 
-            # Compute IPR from eigenvectors
-            H_eigvec = data['H_eigvec'][d_idx, r_idx]
-            SL_eigvec = data['SL_eigvec'][d_idx, r_idx]
-            H_IPR_list.append(compute_ipr(H_eigvec.T))
-            SL_IPR_list.append(compute_ipr(SL_eigvec.T))
+            # Prefer pre-computed IPR, fall back to computing from eigenvectors
+            if has_precomputed_ipr:
+                H_IPR_list.append(data['H_IPR'][d_idx, r_idx])
+                SL_IPR_list.append(data['SL_IPR'][d_idx, r_idx])
+            else:
+                H_eigvec = data['H_eigvec'][d_idx, r_idx]
+                SL_eigvec = data['SL_eigvec'][d_idx, r_idx]
+                H_IPR_list.append(compute_ipr(H_eigvec.T))
+                SL_IPR_list.append(compute_ipr(SL_eigvec.T))
 
         H_eigval = np.concatenate(H_eigval_list)
         H_IPR = np.concatenate(H_IPR_list)
@@ -622,10 +648,10 @@ def plot_mobility_edge_trajectory(all_data, ipr_threshold=None, save_path=None):
         print("Skipping mobility edge trajectory plot (COMPUTE_IPR=False)")
         return None, None
 
-    # Check if any data has eigenvectors
-    has_any_eigvec = any(d.get('has_eigvec', False) for d in all_data.values())
-    if not has_any_eigvec:
-        print("Warning: No eigenvector data available. Cannot compute mobility edge.")
+    # Check if any data has IPR (pre-computed or from eigenvectors)
+    has_any_ipr = any(d.get('has_ipr', False) or d.get('has_eigvec', False) for d in all_data.values())
+    if not has_any_ipr:
+        print("Warning: No IPR or eigenvector data available. Cannot compute mobility edge.")
         return None, None
 
     fig, axs = plt.subplots(1, 2, figsize=(14, 6), constrained_layout=True)
@@ -633,8 +659,11 @@ def plot_mobility_edge_trajectory(all_data, ipr_threshold=None, save_path=None):
     colors_L = plt.cm.viridis(np.linspace(0.2, 0.8, len(all_data)))
 
     for (L, data), color in zip(sorted(all_data.items()), colors_L):
-        if not data.get('has_eigvec', False):
-            print(f"Skipping L={L}: no eigenvector data")
+        has_precomputed_ipr = data.get('has_ipr', False)
+        has_eigvec = data.get('has_eigvec', False)
+
+        if not has_precomputed_ipr and not has_eigvec:
+            print(f"Skipping L={L}: no IPR or eigenvector data")
             continue
 
         disorder_values = data['disorder_values']
@@ -647,9 +676,13 @@ def plot_mobility_edge_trajectory(all_data, ipr_threshold=None, save_path=None):
         for d_idx in range(n_disorder):
             for r_idx in range(n_realizations):
                 H_eigval = data['H_eigval'][d_idx, r_idx]
-                # Compute IPR from eigenvectors
-                H_eigvec = data['H_eigvec'][d_idx, r_idx]
-                H_IPR = compute_ipr(H_eigvec.T)
+
+                # Prefer pre-computed IPR, fall back to computing from eigenvectors
+                if has_precomputed_ipr:
+                    H_IPR = data['H_IPR'][d_idx, r_idx]
+                else:
+                    H_eigvec = data['H_eigvec'][d_idx, r_idx]
+                    H_IPR = compute_ipr(H_eigvec.T)
 
                 threshold = ipr_threshold if ipr_threshold else 2.0 / len(H_eigval)
                 Ec_l, Ec_u, _, _ = extract_mobility_edge(H_eigval, H_IPR, ipr_threshold=threshold)
@@ -703,9 +736,12 @@ def plot_filtered_rz_statistics(data, ipr_threshold=None, save_path=None):
         print("Note: This plot requires mobility edge from IPR. Consider plot_rz_statistics_unfiltered() instead.")
         return None, None
 
-    if not data.get('has_eigvec', False):
-        print("Warning: Eigenvector data not available. Cannot compute IPR for mobility edge.")
-        print("Make sure eigenvector files (*_eigvec.dat) are present.")
+    has_precomputed_ipr = data.get('has_ipr', False)
+    has_eigvec = data.get('has_eigvec', False)
+
+    if not has_precomputed_ipr and not has_eigvec:
+        print("Warning: Neither pre-computed IPR nor eigenvector data available.")
+        print("Make sure IPR files (*_IPR.dat) or eigenvector files (*_eigvec.dat) are present.")
         return None, None
 
     fig, axs = plt.subplots(2, 2, figsize=FIGSIZE_2x2, constrained_layout=True)
@@ -726,9 +762,12 @@ def plot_filtered_rz_statistics(data, ipr_threshold=None, save_path=None):
             H_eigval = data['H_eigval'][d_idx, r_idx]
             SL_eigval = data['SL_eigval'][d_idx, r_idx]
 
-            # Compute IPR from eigenvectors
-            H_eigvec = data['H_eigvec'][d_idx, r_idx]
-            H_IPR = compute_ipr(H_eigvec.T)
+            # Prefer pre-computed IPR, fall back to computing from eigenvectors
+            if has_precomputed_ipr:
+                H_IPR = data['H_IPR'][d_idx, r_idx]
+            else:
+                H_eigvec = data['H_eigvec'][d_idx, r_idx]
+                H_IPR = compute_ipr(H_eigvec.T)
 
             # Extract mobility edge from H
             threshold = ipr_threshold if ipr_threshold else 2.0 / len(H_eigval)
@@ -964,11 +1003,18 @@ def main():
             print(f"Loading data for L={L}...")
             all_data[L] = load_data(data_files, L)
 
-            # Check for eigenvector availability
-            if not all_data[L].get('has_eigvec', False):
-                print(f"  WARNING: No eigenvector files found for L={L}")
-                print(f"           IPR will need to be computed from eigenvectors.")
-                print(f"           Looking for: *_H_eigvec.dat, *_spectral_localiser_eigvec.dat")
+            # Report IPR data availability
+            has_ipr = all_data[L].get('has_ipr', False)
+            has_eigvec = all_data[L].get('has_eigvec', False)
+
+            if has_ipr:
+                print(f"  Using pre-computed IPR files for L={L}")
+            elif has_eigvec:
+                print(f"  Will compute IPR from eigenvectors for L={L}")
+            else:
+                print(f"  WARNING: No IPR or eigenvector files found for L={L}")
+                print(f"           IPR-based plots will be skipped.")
+                print(f"           Looking for: *_H_IPR.dat, *_spectral_localiser_IPR.dat")
 
     # Generate timestamp for filenames
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
