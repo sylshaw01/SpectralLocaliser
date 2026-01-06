@@ -4,7 +4,7 @@ module purge
 module load GCC/13.2.0 OpenMPI/4.1.6 SciPy-bundle/2023.11
 
 
-cat > job1dSSH.sh << "EOF"
+cat > job1dSSHkappa.sh << "EOF"
 #!/bin/bash
 
 
@@ -37,7 +37,7 @@ export OMP_NUM_THREADS=1
 
 
 
-python 1dSSH_combined.py $p "$1"
+python 1dSSHkappa_combined.py $p "$1"
 EOF
 
 python - <<"EOF"
@@ -68,7 +68,7 @@ with open("1dSSH_combined.py", "w") as f:
     f.write(combined)
 EOF
 
-sbatch jobSSH.sh $1
+sbatch job1dSSHkappa.sh $1
 
 
 
