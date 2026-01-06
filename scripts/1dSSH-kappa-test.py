@@ -18,7 +18,6 @@ import hashlib
 # Import SLmodels from src
 sys.path.append('../src')
 from SLmodels import *
-from scipy.sparse.linalg import eigsh
 
 def single_iteration(args):
     # Unpack arguments
@@ -132,7 +131,7 @@ if __name__ == "__main__":
             print(f"   Disorder: {disorder}", flush=True)
             disorder_time = time.time()
             modelforkappa = OneDimensionalSSHBlockBasis(L, disorder, rho, 1,v,w)
-            largest_eigenvalue = np.max(eigsh(modelforkappa.H, k=6, which='LA', return_eigenvectors=False, maxiter=5000))
+            largest_eigenvalue = np.max(np.abs(np.linalg.eigvalsh(modelforkappa.H.toarray())))
             kappa = kappa_file * (largest_eigenvalue/ rho) # Rough value which is appropriate for kappa, for the SSH model
             print(f"      |H| is approximately {largest_eigenvalue:.2f}", flush=True)
             print(f"      Using kappa = {kappa:.2f}", flush=True)
