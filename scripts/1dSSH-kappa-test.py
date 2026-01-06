@@ -83,7 +83,7 @@ if __name__ == "__main__":
     retevec = False
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    base_name = f"../data/1dSSH_L{L}_w_{w}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
+    base_name = f"../data/1dSSHkappa_L{L}_w_{w}_{kappa_file}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
 
     shape_4d = (len(disorder_values), num_disorder_realisations, L, L)
     shape_3d = (len(disorder_values), num_disorder_realisations, L)
