@@ -134,7 +134,7 @@ if __name__ == "__main__":
             largest_eigenvalue = np.max(np.abs(np.linalg.eigvalsh(modelforkappa.H.toarray())))
             kappa = kappa_file * (largest_eigenvalue/ rho) # Rough value which is appropriate for kappa, for the SSH model
             print(f"      |H| is approximately {largest_eigenvalue:.2f}", flush=True)
-            print(f"      Using kappa = {kappa:.2f}", flush=True)
+            print(f"      Using kappa = {kappa:.10f}", flush=True)
             args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,retevec, reteval, v,w, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
