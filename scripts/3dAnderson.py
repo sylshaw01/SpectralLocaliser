@@ -38,7 +38,7 @@ def single_iteration(args):
     spectral_localiser_IPR = m.compute_IPR(m.spectral_localiser_eigvec)
     H_IPR = m.compute_IPR(m.H_eigvec)
     if return_evec:
-        return  H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, seed
+        return  H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, H_IPR, spectral_localiser_IPR, seed
     return  H_eigval, spectral_localiser_eigval,H_IPR, spectral_localiser_IPR,  seed
 
 
@@ -136,18 +136,22 @@ if __name__ == "__main__":
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
             if retevec:
-                H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, seed_values = zip(*results)
+                H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, H_IPR, spectral_localiser_IPR, seed_values = zip(*results)
                 seeds[ j, :] = seed_values
                 H_eigval_results[j,:, :] = np.array(H_eigval)
                 spectral_localiser_eigval_results[j,:, :] = np.array(spectral_localiser_eigval)
                 H_eigvec_results[j,:, :, :] = np.array(H_eigvec)
                 spectral_localiser_eigvec_results[j,:, :, :] = np.array(spectral_localiser_eigvec)
+                H_IPR_results[j,:, :] = np.array(H_IPR)
+                spectral_localiser_IPR_results[j,:, :] = np.array(spectral_localiser_IPR)
 
                 seeds.flush()
                 H_eigval_results.flush()
                 spectral_localiser_eigval_results.flush()
                 H_eigvec_results.flush()
                 spectral_localiser_eigvec_results.flush()
+                H_IPR_results.flush()
+                spectral_localiser_IPR_results.flush()
                 continue
             else:
                 H_eigval, spectral_localiser_eigval, H_IPR, spectral_localiser_IPR, seed_values = zip(*results)
