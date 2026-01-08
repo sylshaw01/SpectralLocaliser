@@ -37,8 +37,8 @@ def single_iteration(args):
     spectral_localiser_eigvec = m.spectral_localiser_eigvec
     spectral_localiser_IPR = m.compute_IPR(m.spectral_localiser_eigvec)
     H_IPR = m.compute_IPR(m.H_eigvec)
-    if retevec:
-        return  H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, seed
+    if return_evec:
+        return  H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, H_IPR, spectral_localiser_IPR, seed
     return  H_eigval, spectral_localiser_eigval,H_IPR, spectral_localiser_IPR,  seed
 
 
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     retevec = False
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    base_name = f"../data/1dSSH_L{L}_w_{w_start}-{w_end}_{kappa_file}_disorder{disorder}-_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
+    base_name = f"../data/1dSSH_L{L}_w_{w_start}-{w_end}_{kappa_file}_disorder{disorder}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
 
     shape_4d = (len(w_values), num_disorder_realisations, L, L)
     shape_3d = (len(w_values), num_disorder_realisations, L)
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     print(f"{cpu_count} Cores found! Using...All of them!!")
     print(f"Parameters loaded from {parameters_file}")
-    print(f"w from {w_start} to {w_end} with {disorder} steps")
+    print(f"w from {w_start} to {w_end} with {w_resolution} steps")
     print(f"{num_disorder_realisations} disorder realizations per parameter set")
     print(f"Disorder strength: {disorder}")
     print(f"kappa scaling factor: {kappa_file}")
