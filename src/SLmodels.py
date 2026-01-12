@@ -527,160 +527,197 @@ class TwoDimensionalHaldane(Model):
         
 
     def create_hamiltonian(self):
-        """Generate the Hamiltonian matrix for the disordered Haldane model"""
+        """Generate the Hamiltonian matrix for the disordered Haldane model.
+
+        Vectorized implementation that avoids Python loops over matrix indices.
+        Uses numpy boolean masking to select valid hopping pairs based on
+        boundary conditions.
+        """
         mat_size = self.L * self.L * 2
-        
-        # On-site potentials
-        diagonal_a = np.zeros(mat_size, dtype=complex)
-        diagonal_b = np.zeros(mat_size, dtype=complex)
-        diagonal_disorder = np.zeros(mat_size, dtype=complex)
-        
-        for i in range(mat_size):
-            if (i % 2 == 0): 
-                diagonal_a[i] = self.M
-            else:  
-                diagonal_b[i] = -self.M
-            
-            if self.disorder > 0:
-                diagonal_disorder[i] = np.random.uniform(-self.disorder, self.disorder)
-        
-        on_site_terms = sp.diags(diagonal_a + diagonal_b + diagonal_disorder)
-        
-        # Nearest neighbor hopping terms
-        row_indices, col_indices, values = [], [], []
-        
-        # Equivalent to aLeft, bLeft, aRight, bRight, aDown, bUp
-        for i in range(mat_size):
-            # aLeft
-            if (i % 2 == 0)  and (i - 1 >= 0) and ((i) % (2*self.L) != 0):
-                row_indices.append(i)
-                col_indices.append(i - 1)
-                values.append(-self.t1)
-            
-            # bLeft
-            if (i % 2 == 1) and (i - 1 >=0 ) :
-                row_indices.append(i)
-                col_indices.append(i - 1)
-                values.append(-self.t1)
-            
-            # aRight
-            if (i % 2 == 0) and (i + 1 < mat_size):
-                row_indices.append(i)
-                col_indices.append(i + 1)
-                values.append(-self.t1)
-            
-            # bRight
-            if (i % 2 == 1) and (i + 1 < mat_size) and (i % (2*self.L) != (2*self.L - 1)):
-                row_indices.append(i)
-                col_indices.append(i + 1)
-                values.append(-self.t1)
-            
-            # aDown
-            if (i % 2 == 0) and (i + (self.L*2 + 1) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L):
-                row_indices.append(i)
-                col_indices.append(i + (self.L*2 + 1))
-                values.append(-self.t1)
-            
-            # bUp
-            if (i % 2 == 1) and (i - (self.L*2 + 1) >= 0) and (i > (2*self.L)):
-                row_indices.append(i)
-                col_indices.append(i - (self.L*2 + 1))
-                values.append(-self.t1)
-        
-        nn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
-        
-        # Next-nearest neighbor hopping terms for sublattice A
-        row_indices, col_indices, values = [], [], []
-        
-        for i in range(mat_size):
-            # Only for sublattice A sites (even indices in Python, odd in Mathematica)
-            if i % 2 == 0:
-                # aNNNULeft
-                if (i - (self.L*2 + 2) >= 0)  and (i % (2*self.L) > 0):
-                    row_indices.append(i)
-                    col_indices.append(i - (self.L*2 + 2))
-                    values.append(-self.t2 * np.exp(1j*self.phi))
-                
-                # aNNNLeft
-                if (i - 2 >= 0) and (i % (self.L*2) != 0):
-                    row_indices.append(i)
-                    col_indices.append(i - 2)
-                    values.append(-self.t2 * np.exp(-1j*self.phi))
-                
-                # aNNNDRight
-                if (i + (self.L*2 + 2) < mat_size)  and (i % (2*self.L) < (2*self.L -2)):
-                    row_indices.append(i)
-                    col_indices.append(i + (self.L*2 +2))
-                    values.append(-self.t2 * np.exp(-1j*self.phi))
-                
-                # aNNNDLeft
-                if (i + (self.L*2) < mat_size):
-                    row_indices.append(i)
-                    col_indices.append(i + (self.L*2))
-                    values.append(-self.t2 * np.exp(1j*self.phi))
-                
-                # aNNNRight
-                if (i + 2 < mat_size) and (i % (2*self.L) < (2*self.L - 2)):
-                    row_indices.append(i)
-                    col_indices.append(i + 2)
-                    values.append(-self.t2 * np.exp(1j*self.phi))
-                
-                # aNNNURight
-                if (i - (self.L*2) >= 0) :
-                    row_indices.append(i)
-                    col_indices.append(i - (self.L*2))
-                    values.append(-self.t2 * np.exp(-1j*self.phi))
-        
-        annn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
-        # annn_terms = annn_terms + annn_terms.conj().T  # Add in Hermitian conjugate parts
-        
-        # Next-nearest neighbor hopping terms for sublattice B
-        row_indices, col_indices, values = [], [], []
-        
-        for i in range(mat_size):
-            # Only for sublattice B sites (odd indices in Python, even in Mathematica)
-            if i % 2 == 1:
-                # bNNNULeft
-                if (i - (self.L*2 + 2) >= 0)  and ((i) % (2*self.L) != 1):
-                    row_indices.append(i)
-                    col_indices.append(i - (self.L*2 + 2))
-                    values.append(-self.t2 * np.exp(-1j*self.phi))
-                
-                # bNNNLeft
-                if (i - 2 >= 0) and (i % (self.L*2) != 1):
-                    row_indices.append(i)
-                    col_indices.append(i - 2)
-                    values.append(-self.t2 * np.exp(1j*self.phi))
-                
-                # bNNNDRight
-                if (i + (self.L*2 + 2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L) and (i % (2*self.L) != (2*self.L - 1)):
-                    row_indices.append(i)
-                    col_indices.append(i + (self.L*2 +2))
-                    values.append(-self.t2 * np.exp(1j*self.phi))
-                
-                # bNNNDLeft
-                if (i + (self.L*2) < mat_size) and (np.ceil((i+1)/(2*self.L)) != self.L):
-                    row_indices.append(i)
-                    col_indices.append(i + (self.L*2))
-                    values.append(-self.t2 * np.exp(-1j*self.phi))
-                
-                # bNNNRight
-                if (i + 2 < mat_size) and (i % (2*self.L) != (2*self.L - 1)):
-                    row_indices.append(i)
-                    col_indices.append(i + 2)
-                    values.append(-self.t2 * np.exp(-1j*self.phi))
-                
-                # bNNNURight
-                if (i - (self.L*2) >= 0) :
-                    row_indices.append(i)
-                    col_indices.append(i - (self.L*2))
-                    values.append(-self.t2 * np.exp(1j*self.phi))
-        
-        bnnn_terms = sp.coo_matrix((values, (row_indices, col_indices)), shape=(mat_size, mat_size))
-        # bnnn_terms = bnnn_terms + bnnn_terms.conj().T  # Add in Hermitian conjugate parts
-        # Combine all terms
-        H = on_site_terms + nn_terms + annn_terms + bnnn_terms
-        
+        L2 = 2 * self.L  # Frequently used constant
+
+        # All site indices
+        all_idx = np.arange(mat_size)
+
+        # Sublattice masks
+        is_A = (all_idx % 2 == 0)  # A sublattice (even indices)
+        is_B = (all_idx % 2 == 1)  # B sublattice (odd indices)
+
+        # Position within row (0 to 2L-1) and row number (0 to L-1)
+        pos_in_row = all_idx % L2
+        row_num = all_idx // L2
+
+        # ===== On-site terms (vectorized) =====
+        diagonal = np.where(is_A, self.M, -self.M).astype(complex)
+        if self.disorder > 0:
+            diagonal += np.random.uniform(-self.disorder, self.disorder, mat_size)
+        on_site_terms = sp.diags(diagonal, format='csr')
+
+        # Collect all hopping terms: lists of (row_indices, col_indices, values)
+        all_rows = []
+        all_cols = []
+        all_vals = []
+
+        # ===== Nearest neighbor hopping terms =====
+        # Each NN hopping has amplitude -t1
+
+        # aLeft: A site (even) hops to B site at i-1
+        # Conditions: is_A, i-1 >= 0, not at left edge of row (pos_in_row != 0)
+        A_sites = all_idx[is_A]
+        A_pos = pos_in_row[is_A]
+        A_row = row_num[is_A]
+
+        mask = A_pos != 0  # Not at left edge (i-1 >= 0 is implied for A sites with pos > 0)
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] - 1)
+        all_vals.append(np.full(np.sum(mask), -self.t1, dtype=complex))
+
+        # bLeft: B site (odd) hops to A site at i-1
+        # Conditions: is_B, i-1 >= 0 (always true for B sites since smallest B is 1)
+        B_sites = all_idx[is_B]
+        B_pos = pos_in_row[is_B]
+        B_row = row_num[is_B]
+
+        all_rows.append(B_sites)
+        all_cols.append(B_sites - 1)
+        all_vals.append(np.full(len(B_sites), -self.t1, dtype=complex))
+
+        # aRight: A site (even) hops to B site at i+1
+        # Conditions: is_A, i+1 < mat_size (always true except last A site)
+        mask = A_sites + 1 < mat_size
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] + 1)
+        all_vals.append(np.full(np.sum(mask), -self.t1, dtype=complex))
+
+        # bRight: B site (odd) hops to A site at i+1
+        # Conditions: is_B, i+1 < mat_size, not at right edge (pos_in_row != 2L-1)
+        mask = (B_sites + 1 < mat_size) & (B_pos != L2 - 1)
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] + 1)
+        all_vals.append(np.full(np.sum(mask), -self.t1, dtype=complex))
+
+        # aDown: A site (even) hops to B site at i + (2L+1)
+        # Conditions: is_A, i + (2L+1) < mat_size, not on last row
+        offset = L2 + 1
+        mask = (A_sites + offset < mat_size) & (A_row != self.L - 1)
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] + offset)
+        all_vals.append(np.full(np.sum(mask), -self.t1, dtype=complex))
+
+        # bUp: B site (odd) hops to A site at i - (2L+1)
+        # Conditions: is_B, i - (2L+1) >= 0, not on first row (i > 2L means row > 0)
+        offset = L2 + 1
+        mask = (B_sites >= offset) & (B_row > 0)
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] - offset)
+        all_vals.append(np.full(np.sum(mask), -self.t1, dtype=complex))
+
+        # ===== Next-nearest neighbor hopping for A sublattice =====
+        # Complex phases: exp(+i*phi) or exp(-i*phi)
+        phase_plus = -self.t2 * np.exp(1j * self.phi)
+        phase_minus = -self.t2 * np.exp(-1j * self.phi)
+
+        # aNNNULeft: offset -(2L+2), phase exp(+i*phi)
+        # Conditions: i - (2L+2) >= 0, pos_in_row > 0
+        offset = L2 + 2
+        mask = (A_sites >= offset) & (A_pos > 0)
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] - offset)
+        all_vals.append(np.full(np.sum(mask), phase_plus, dtype=complex))
+
+        # aNNNLeft: offset -2, phase exp(-i*phi)
+        # Conditions: i - 2 >= 0, pos_in_row != 0 (not at left edge)
+        mask = (A_sites >= 2) & (A_pos != 0)
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] - 2)
+        all_vals.append(np.full(np.sum(mask), phase_minus, dtype=complex))
+
+        # aNNNDRight: offset +(2L+2), phase exp(-i*phi)
+        # Conditions: i + (2L+2) < mat_size, pos_in_row < 2L-2 (not at right edge)
+        offset = L2 + 2
+        mask = (A_sites + offset < mat_size) & (A_pos < L2 - 2)
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] + offset)
+        all_vals.append(np.full(np.sum(mask), phase_minus, dtype=complex))
+
+        # aNNNDLeft: offset +2L, phase exp(+i*phi)
+        # Conditions: i + 2L < mat_size
+        mask = A_sites + L2 < mat_size
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] + L2)
+        all_vals.append(np.full(np.sum(mask), phase_plus, dtype=complex))
+
+        # aNNNRight: offset +2, phase exp(+i*phi)
+        # Conditions: i + 2 < mat_size, pos_in_row < 2L-2 (room for +2 within row)
+        mask = (A_sites + 2 < mat_size) & (A_pos < L2 - 2)
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] + 2)
+        all_vals.append(np.full(np.sum(mask), phase_plus, dtype=complex))
+
+        # aNNNURight: offset -2L, phase exp(-i*phi)
+        # Conditions: i - 2L >= 0
+        mask = A_sites >= L2
+        all_rows.append(A_sites[mask])
+        all_cols.append(A_sites[mask] - L2)
+        all_vals.append(np.full(np.sum(mask), phase_minus, dtype=complex))
+
+        # ===== Next-nearest neighbor hopping for B sublattice =====
+        # B sublattice has OPPOSITE phases to A sublattice
+
+        # bNNNULeft: offset -(2L+2), phase exp(-i*phi)  [opposite of A]
+        # Conditions: i - (2L+2) >= 0, pos_in_row != 1 (not at left edge for B)
+        offset = L2 + 2
+        mask = (B_sites >= offset) & (B_pos != 1)
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] - offset)
+        all_vals.append(np.full(np.sum(mask), phase_minus, dtype=complex))
+
+        # bNNNLeft: offset -2, phase exp(+i*phi)  [opposite of A]
+        # Conditions: i - 2 >= 0, pos_in_row != 1 (not at left edge for B)
+        mask = (B_sites >= 2) & (B_pos != 1)
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] - 2)
+        all_vals.append(np.full(np.sum(mask), phase_plus, dtype=complex))
+
+        # bNNNDRight: offset +(2L+2), phase exp(+i*phi)  [opposite of A]
+        # Conditions: i + (2L+2) < mat_size, not last row, not at right edge
+        offset = L2 + 2
+        mask = (B_sites + offset < mat_size) & (B_row != self.L - 1) & (B_pos != L2 - 1)
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] + offset)
+        all_vals.append(np.full(np.sum(mask), phase_plus, dtype=complex))
+
+        # bNNNDLeft: offset +2L, phase exp(-i*phi)  [opposite of A]
+        # Conditions: i + 2L < mat_size, not last row
+        mask = (B_sites + L2 < mat_size) & (B_row != self.L - 1)
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] + L2)
+        all_vals.append(np.full(np.sum(mask), phase_minus, dtype=complex))
+
+        # bNNNRight: offset +2, phase exp(-i*phi)  [opposite of A]
+        # Conditions: i + 2 < mat_size, not at right edge
+        mask = (B_sites + 2 < mat_size) & (B_pos != L2 - 1)
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] + 2)
+        all_vals.append(np.full(np.sum(mask), phase_minus, dtype=complex))
+
+        # bNNNURight: offset -2L, phase exp(+i*phi)  [opposite of A]
+        # Conditions: i - 2L >= 0
+        mask = B_sites >= L2
+        all_rows.append(B_sites[mask])
+        all_cols.append(B_sites[mask] - L2)
+        all_vals.append(np.full(np.sum(mask), phase_plus, dtype=complex))
+
+        # ===== Combine all hopping terms =====
+        all_rows = np.concatenate(all_rows)
+        all_cols = np.concatenate(all_cols)
+        all_vals = np.concatenate(all_vals)
+
+        hopping_terms = sp.coo_matrix((all_vals, (all_rows, all_cols)),
+                                       shape=(mat_size, mat_size))
+
+        H = on_site_terms + hopping_terms
+
         return H  
 
     def create_position_operator(self):
@@ -706,60 +743,71 @@ class TwoDimensionalHaldane(Model):
         return [X_operator, Y_operator]
 
     def projection_operator_lower(self, fermi_energy, ac=3/(2*np.sqrt(3)) ):
-        """Create projection operator for states below the Fermi energy"""
+        """Create projection operator for states below the Fermi energy.
+
+        Uses efficient matrix multiplication P = V @ V^H instead of
+        summing outer products, which eliminates O(n_occ) temporary N×N matrices.
+        """
         # Get eigenvalues and eigenvectors
-        
         if self.H_eigval is None or self.H_eigvec is None:
             self.find_eigval(self.H, sparse=False)
+
         # Find indices of occupied states (below Fermi energy)
         occupied_indices = np.where(self.H_eigval <= fermi_energy)[0]
-        
+
         if len(occupied_indices) == 0:
-            self.P =  np.zeros(self.H.shape, dtype=complex)
-        
-        # Create projection operator
-        projector = np.zeros(self.H.shape, dtype=complex)
-        for idx in occupied_indices:
-            v = self.H_eigvec[:, idx]
-            projector += np.outer(v, v.conj())
-        
-        self.P =   projector
+            self.P = np.zeros(self.H.shape, dtype=complex)
+            return
+
+        # Create projection operator efficiently: P = V @ V^H
+        # where V is the matrix of occupied eigenvectors
+        occupied_eigvec = self.H_eigvec[:, occupied_indices]
+        self.P = occupied_eigvec @ occupied_eigvec.conj().T
 
     def calculate_local_chern_marker(self, ac=3/(2*np.sqrt(3)), fermi_energy=0) -> np.ndarray:
-    # Calculate Chern marker
+        """Calculate local Chern marker per unit cell.
+
+        Computes C(r) = -(4π/ac) * Im[P X (I-P) Y P]_{rr} for each unit cell.
+
+        Memory-optimized: avoids creating explicit dense identity matrix by
+        computing (I-P) @ M as M - P @ M. Also vectorizes diagonal extraction.
+        """
         mat_size = self.L * self.L * 2
+
+        # Ensure eigenvalues/eigenvectors are computed
+        if self.H_eigval is None or self.H_eigvec is None:
+            self.find_eigval(self.H, sparse=False)
+
+        # Build projection operator if not already computed
         if self.P is None:
             self.projection_operator_lower(fermi_energy=fermi_energy, ac=ac)
-        
-        c_mat = self.P @ self.X[0] @ (np.eye(mat_size) - self.P) @ self.X[1] @ self.P
-        
-        # Calculate Chern marker per unit cell
-        chern_marker_per_unit_cell = np.zeros(mat_size // 2, dtype=float)
-        for k in range(mat_size // 2):
-            unit_cell_sites = [2*k, 2*k + 1]  # Python is 0-indexed
-            chern_marker_per_unit_cell[k] = -((4*np.pi)/ac) * np.imag(
-                sum(c_mat[site, site] for site in unit_cell_sites)
-            )
-        
-        # # Sample from center region
-        # center_width = self.L // 4
-        # center_length = self.L // 4
-        # center_x = self.L // 2
-        # center_y = self.L // 2
-        
-        # Reshape to 2D for sampling from center
-        chern_marker_reshaped = chern_marker_per_unit_cell.reshape(self.L, self.L)
-        
-        # # Calculate average over center region
-        # center_values = []
-        # for x in range(center_x - center_width, center_x + center_width + 1):
-        #     for y in range(center_y - center_length, center_y + center_length + 1):
-        #         if 0 <= x < self.L and 0 <= y < self.L:
-        #             center_values.append(chern_marker_reshaped[x, y])
-        
-        # chern_value = np.mean(center_values)
 
-        return chern_marker_reshaped
+        # Get position operator diagonals (X and Y are diagonal matrices)
+        x_diag = self.X[0].diagonal()
+        y_diag = self.X[1].diagonal()
+
+        # Compute c_mat = P @ X @ (I-P) @ Y @ P step by step
+        # Using (I-P) @ M = M - P @ M to avoid creating dense identity
+
+        # Step 1: Y @ P (Y is diagonal, so this is element-wise multiply on rows)
+        YP = y_diag[:, np.newaxis] * self.P  # N × N
+
+        # Step 2: (I-P) @ YP = YP - P @ YP
+        P_YP = self.P @ YP
+        IminusP_YP = YP - P_YP
+
+        # Step 3: X @ (I-P) @ YP (X is diagonal)
+        X_IminusP_YP = x_diag[:, np.newaxis] * IminusP_YP  # N × N
+
+        # Step 4: P @ X @ (I-P) @ YP
+        c_mat = self.P @ X_IminusP_YP  # N × N
+
+        # Extract diagonal and sum pairs for each unit cell (vectorized)
+        c_diag = np.diag(c_mat)
+        # Sum contributions from A site (even indices) and B site (odd indices)
+        chern_marker_per_unit_cell = -((4*np.pi)/ac) * np.imag(c_diag[::2] + c_diag[1::2])
+
+        return chern_marker_per_unit_cell.reshape(self.L, self.L)
 
     def create_localiser(self, e0=0, x0=0, y0=0):
         kappa = self.kappa

@@ -15,6 +15,16 @@ src_path = Path(__file__).parent.parent / 'src'
 sys.path.insert(0, str(src_path))
 
 
+def pytest_addoption(parser):
+    """Add custom command line options."""
+    parser.addoption(
+        "--generate-reference",
+        action="store_true",
+        default=False,
+        help="Regenerate reference data files for regression tests"
+    )
+
+
 @pytest.fixture(autouse=True)
 def reset_random_seed():
     """

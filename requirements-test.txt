@@ -1,0 +1,14 @@
+# Testing dependencies for SpectralLocalizer
+
+# Core testing framework
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-xdist>=3.0.0
+
+# Scientific computing (should already be installed)
+numpy>=1.20.0
+scipy>=1.7.0
+
+# Optional: for better test output
+pytest-sugar>=0.9.6
+pytest-html>=3.1.0

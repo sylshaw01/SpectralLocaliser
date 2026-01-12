@@ -39,7 +39,7 @@ def single_iteration(args):
     H_IPR = m.compute_IPR(m.H_eigvec)
     if return_evec:
         return  H_eigval, spectral_localiser_eigval, H_eigvec, spectral_localiser_eigvec, H_IPR, spectral_localiser_IPR, seed
-    return  H_eigval, spectral_localiser_eigval,H_IPR, spectral_localiser_IPR,  seed
+    return  H_eigval, spectral_localiser_eigval, H_IPR, spectral_localiser_IPR,  seed
 
 
 
