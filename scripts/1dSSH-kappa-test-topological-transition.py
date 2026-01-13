@@ -135,7 +135,7 @@ if __name__ == "__main__":
             print(f"   w: {w}", flush=True)
             disorder_time = time.time()
             modelforkappa = OneDimensionalSSHBlockBasis(L, disorder, rho, 1,v,w)
-            largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
+            largest_eigenvalue = abs(eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0])
             kappa = kappa_file * (largest_eigenvalue/ rho) # Rough value which is appropriate for kappa, for the SSH model
             print(f"      |H| is approximately {largest_eigenvalue:.2f}", flush=True)
             print(f"      Using kappa = {kappa:.10f}", flush=True)
