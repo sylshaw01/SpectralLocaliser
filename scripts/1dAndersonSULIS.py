@@ -134,7 +134,7 @@ if __name__ == "__main__":
             # Find largest eigenvalue to set kappa appropriately
             modelforkappa = OneDimensionalAnderson(L, disorder, rho=L//2, kappa=1.0)
             largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
-            kappa = largest_eigenvalue / rho
+            kappa = abs(largest_eigenvalue) / rho
             print(f"      Setting kappa to {kappa:.12f} based on largest eigenvalue {largest_eigenvalue:.12f}", flush=True)
             args_list = [(L, rho, kappa, disorder, num_eigval, X, sparse, retevec, reteval, E_offset, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
