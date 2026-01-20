@@ -29,10 +29,10 @@ def single_iteration(args):
     np.random.seed(seed)
 
     m = OneDimensionalAnderson(L, disorder, rho, kappa, X)
-    m.find_eigval(m.H, num_eigval=num_eigval, sparse=sparse)
+    m.find_eigval(m.H, sparse=False)
     H_eigval = m.H_eigval
     H_eigvec = m.H_eigvec
-    m.find_eigval(m.spectral_localiser, num_eigval=num_eigval, sparse=sparse)
+    m.find_eigval(m.spectral_localiser, sparse=False)
     spectral_localiser_eigval = m.spectral_localiser_eigval
     spectral_localiser_eigvec = m.spectral_localiser_eigvec
     spectral_localiser_IPR = m.compute_IPR(m.spectral_localiser_eigvec)
