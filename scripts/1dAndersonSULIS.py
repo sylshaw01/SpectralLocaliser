@@ -21,14 +21,14 @@ from SLmodels import *
 
 def single_iteration(args):
     # Unpack arguments
-    L, rho, kappa, disorder, num_eigval, X, sparse, return_evec, return_eval, i = args
+    L, rho, kappa, disorder, num_eigval, X, sparse, return_evec, return_eval, E_offset, i = args
     # Generate unique seed for reproducibility, using hashlib to avoid collisions
     time_of_day = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
     seed_str = f"{rho}_{disorder}_{num_eigval}_{i}_{kappa:.5f}_{L}_{time_of_day}"
     seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
     np.random.seed(seed)
 
-    m = OneDimensionalAnderson(L, disorder, rho, kappa, X)
+    m = OneDimensionalAnderson(L, disorder, rho, kappa, X, energy_offset = E_offset)
     m.find_eigval(m.H, sparse=False)
     H_eigval = m.H_eigval
     H_eigvec = m.H_eigvec
@@ -71,6 +71,7 @@ if __name__ == "__main__":
     disorder_resolution = int(parameters.get('disorder_resolution', 6))
     # Number of eigenvalues to compute if we are using sparse methods
     num_eigenvalues = int(parameters.get('num_eigenvalues', 600))
+    E_offset = float(parameters.get('E_offset', 0.0))
 
 
     disorder_values = np.linspace(disorder_start, disorder_end, disorder_resolution)
@@ -80,7 +81,7 @@ if __name__ == "__main__":
     retevec = False
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    base_name = f"../data/1dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
+    base_name = f"../data/1dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_E_OFFSET{E_offset}_{current_date}"
 
     # For 1D Anderson: H has size L, spectral_localiser has size 2L
     shape_4d_H = (len(disorder_values), num_disorder_realisations, L, L)
@@ -97,6 +98,7 @@ if __name__ == "__main__":
     print(f"Disorder from {disorder_start} to {disorder_end} with {disorder_resolution} steps")
     print(f"{num_disorder_realisations} disorder realizations per parameter set")
     print(f"Calculating all {L} (H) and {2*L} (SL) eigenvalues per run (dense solve)")
+    print(f"Energy offset set to {E_offset}")
     print("-"*50, flush=True)
 
 
@@ -133,7 +135,8 @@ if __name__ == "__main__":
             modelforkappa = OneDimensionalAnderson(L, disorder, rho=L//2, kappa=1.0)
             largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
             kappa = largest_eigenvalue / rho
-            args_list = [(L, rho, kappa, disorder, num_eigval, X, sparse, retevec, reteval, i) for i in range(num_disorder_realisations)]
+            print(f"      Setting kappa to {kappa:.12f} based on largest eigenvalue {largest_eigenvalue:.12f}", flush=True)
+            args_list = [(L, rho, kappa, disorder, num_eigval, X, sparse, retevec, reteval, E_offset, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
             if retevec:

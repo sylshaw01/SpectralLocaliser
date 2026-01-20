@@ -7,19 +7,20 @@ from abc import ABC, abstractmethod
 
 class Model(ABC):
 
-    def __init__(self,L,disorder, rho, kappa, X=None, periodic = False):
+    def __init__(self,L,disorder, rho, kappa, X=None, periodic = False, energy_offset=0):
         self.L = L # system size
         self.disorder = disorder # disorder strength
         self.rho = rho # fixed value rho for position operator
         self.kappa = kappa # spectral localiser 'potential strength'
         self.X = X if X is not None else self.create_position_operator() 
         self.H = self.create_hamiltonian()
-        self.spectral_localiser = self.create_localiser()
+        self.spectral_localiser = self.create_localiser(energy_offset=energy_offset)
         self.H_eigval = None
         self.spectral_localiser_eigval = None
         self.H_eigvec = None
         self.spectral_localiser_eigvec = None
         self.periodic = periodic
+        self.energy_offset = energy_offset
     
     @abstractmethod
     def create_hamiltonian(self):
@@ -60,7 +61,26 @@ class Model(ABC):
             else:
                 eigval, eigvec = eigh(operator_dense)
         else:
-            eigval, eigvec = eigsh(operator, k=2 * num_eigval, which='SM')
+            try:
+                k = min(num_eigval * 2, operator.shape[0] - 2)
+                # Use shift-invert mode for eigenvalues near zero (band center)
+                # sigma=0, which='LM' finds eigenvalues closest to zero efficiently
+                # This is 10-100× faster than which='SM' for interior eigenvalues
+                eigval, eigvec = eigsh(operator, k=k, sigma=0, which='LM',
+                                       maxiter=10000,
+                                       tol=1e-10)
+            except sp.linalg.ArpackNoConvergence as e:
+                print(f"ARPACK did not converge, solving densely instead")
+                operator_dense = operator.toarray()
+                if not np.allclose(operator_dense, operator_dense.conj().T):
+                    eigval, eigvec = np.linalg.eig(operator_dense)
+                    idx = np.argsort(eigval)
+                    eigval = eigval[idx]
+                    eigvec = eigvec[:, idx]
+                else:
+                    eigval, eigvec = eigh(operator_dense)
+                eigval = eigval[:2*num_eigval]
+                eigvec = eigvec[:, :2*num_eigval]
 
         if operator is self.H:
             self.H_eigval = eigval
@@ -182,7 +202,7 @@ class OneDimensionalAnderson(Model):
         X = sp.diags(row_vector,0,shape=(self.L,self.L),format='csr')
         return X
 
-    def create_localiser(self):
+    def create_localiser(self, energy_offset=0):
         kappa = self.kappa
         X = self.X
         H = self.H
