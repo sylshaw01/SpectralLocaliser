@@ -1,13 +1,18 @@
 #!/bin/bash
 
 
+module purge
+module load GCC/13.2.0 OpenMPI/4.1.6 SciPy-bundle/2023.11
+
 cat > job3da.sh << "EOF"
 #!/bin/bash
 
+
+#SBATCH --account=su007-rr
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=168
-#SBATCH --mem-per-cpu=4591
+#SBATCH --cpus-per-task=128
+#SBATCH --mem-per-cpu=3850
 #SBATCH --time=48:00:00
 
 module purge
