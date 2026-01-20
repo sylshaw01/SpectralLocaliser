@@ -173,47 +173,47 @@ if __name__ == "__main__":
     print(f"Total time for all calculations: {elapsed_time:.2f} seconds, or {(elapsed_time)/60:.2f} minutes, {(elapsed_time)/3600:.2f} hours", flush=True)   
     
 
-    # Compress all output .dat files
-    print("-"*50)
-    print("Compressing output files...")
-    print("-"*50, flush=True)
+    # # Compress all output .dat files
+    # print("-"*50)
+    # print("Compressing output files...")
+    # print("-"*50, flush=True)
 
-    # List of all .dat files to compress
-    dat_files = [
-        f"{base_name}_H_eigval.dat",
-        f"{base_name}_spectral_localiser_eigval.dat",
-        f"{base_name}_H_IPR.dat",
-        f"{base_name}_spectral_localiser_IPR.dat",
-        f"{base_name}_seeds.dat"
-    ]
+    # # List of all .dat files to compress
+    # dat_files = [
+    #     f"{base_name}_H_eigval.dat",
+    #     f"{base_name}_spectral_localiser_eigval.dat",
+    #     f"{base_name}_H_IPR.dat",
+    #     f"{base_name}_spectral_localiser_IPR.dat",
+    #     f"{base_name}_seeds.dat"
+    # ]
 
-    if retevec:
-        dat_files.extend([
-            f"{base_name}_H_eigvec.dat",
-            f"{base_name}_spectral_localiser_eigvec.dat"
-        ])
+    # if retevec:
+    #     dat_files.extend([
+    #         f"{base_name}_H_eigvec.dat",
+    #         f"{base_name}_spectral_localiser_eigvec.dat"
+    #     ])
 
-    compression_start = time.time()
-    for dat_file in dat_files:
-        if os.path.exists(dat_file):
-            print(f"   Compressing {os.path.basename(dat_file)}...", end=' ', flush=True)
-            file_size_before = os.path.getsize(dat_file)
+    # compression_start = time.time()
+    # for dat_file in dat_files:
+    #     if os.path.exists(dat_file):
+    #         print(f"   Compressing {os.path.basename(dat_file)}...", end=' ', flush=True)
+    #         file_size_before = os.path.getsize(dat_file)
 
-            with open(dat_file, 'rb') as f_in:
-                with gzip.open(f"{dat_file}.gz", 'wb', compresslevel=9) as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+    #         with open(dat_file, 'rb') as f_in:
+    #             with gzip.open(f"{dat_file}.gz", 'wb', compresslevel=9) as f_out:
+    #                 shutil.copyfileobj(f_in, f_out)
 
-            file_size_after = os.path.getsize(f"{dat_file}.gz")
-            compression_ratio = (file_size_after / file_size_before) * 100
+    #         file_size_after = os.path.getsize(f"{dat_file}.gz")
+    #         compression_ratio = (file_size_after / file_size_before) * 100
 
-            # Remove the original uncompressed file
-            os.remove(dat_file)
+    #         # Remove the original uncompressed file
+    #         os.remove(dat_file)
 
-            print(f"Done! ({file_size_before/(1024**2):.1f} MB -> {file_size_after/(1024**2):.1f} MB, {compression_ratio:.2f}%)", flush=True)
+    #         print(f"Done! ({file_size_before/(1024**2):.1f} MB -> {file_size_after/(1024**2):.1f} MB, {compression_ratio:.2f}%)", flush=True)
 
-    compression_time = time.time() - compression_start
-    print(f"Compression completed in {compression_time:.2f} seconds", flush=True)
-    print("-"*50, flush=True)
+    # compression_time = time.time() - compression_start
+    # print(f"Compression completed in {compression_time:.2f} seconds", flush=True)
+    # print("-"*50, flush=True)
 
     
     # np.savez(filename, disorder_values = disorder_values, seeds = seeds, H_eigval = H_eigval_results, spectral_localiser_eigval=spectral_localiser_eigval_results, H_IPR=H_IPR_results, spectral_localiser_IPR=spectral_localiser_IPR_results)   
