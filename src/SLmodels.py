@@ -942,7 +942,7 @@ class ThreeDimensionalAnderson(Model):
         return [X,Y,Z]
         
 
-    def create_localiser(self):
+    def create_localiser(self, energy_offset=0):
         pauli_x = sp.csr_matrix(np.array([[0,1],[1,0]]))
         pauli_y = sp.csr_matrix(np.array([[0,-1j],[1j,0]]))
         pauli_z = sp.csr_matrix(np.array([[1,0],[0,-1]]))
