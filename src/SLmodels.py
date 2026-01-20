@@ -869,6 +869,50 @@ class ThreeDimensionalLiebModel(Model):
     def create_localiser(self):
         pass
 
+
+class TwoDimensionalAnderson(Model):
+
+    def create_hamiltonian(self):
+        N = self.L**2
+        L = self.L
+
+        t = -1.0
+
+        on_diag = (np.random.rand(N) - 0.5) * self.disorder
+
+        off_diag_x = t * np.ones(N - 1)
+        off_diag_x[L-1::L] = 0
+        off_diag_y = t * np.ones(N - L)
+        H = sp.diags(
+            [
+                on_diag,
+                off_diag_x, off_diag_x,
+                off_diag_y, off_diag_y
+            ],
+            [
+                0,
+                -1, 1,
+                -L, L
+            ],
+            shape=(N, N),
+            format='csr'
+        )
+        return H
+
+    def create_position_operator(self):
+        xvals = np.linspace(-self.rho,self.rho,self.L)
+        xdiag = np.tile(xvals, self.L)
+        ydiag = np.repeat(xvals,self.L)
+
+        X = sp.diags(xdiag, 0, shape=(self.L**2,self.L**2),format = "csr")
+        Y = sp.diags(ydiag, 0, shape=(self.L**2,self.L**2),format = "csr")
+
+        return [X,Y]
+
+    def create_localiser(self):
+        pass
+
+
 class ThreeDimensionalAnderson(Model):
 
 
