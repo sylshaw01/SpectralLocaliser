@@ -65,7 +65,7 @@ if __name__ == "__main__":
     num_disorder_realisations = int(parameters.get('num_disorder_realisations', 100))
 
     rho = float(parameters.get('rho', 30.0))
-    kappa = float(parameters.get('kappa', 0.1))
+    file_kappa = float(parameters.get('kappa', 0.1))
     disorder_start = float(parameters.get('disorder_start', 0.0))
     disorder_end = float(parameters.get('disorder_end', 5.0))
     disorder_resolution = int(parameters.get('disorder_resolution', 6))
@@ -81,7 +81,10 @@ if __name__ == "__main__":
     retevec = False
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    base_name = f"../data/1dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_kappa{kappa}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_E_OFFSET{E_offset}_{current_date}"
+    if file_kappa < 0:
+        base_name = f"../data/1dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_E_OFFSET{E_offset}_{current_date}"
+    else:
+        base_name = f"../data/1dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_kappa{file_kappa}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_E_OFFSET{E_offset}_{current_date}"
 
     # For 1D Anderson: H has size L, spectral_localiser has size 2L
     shape_4d_H = (len(disorder_values), num_disorder_realisations, L, L)
@@ -134,9 +137,10 @@ if __name__ == "__main__":
             # Find largest eigenvalue to set kappa appropriately
             modelforkappa = OneDimensionalAnderson(L, disorder, rho=L//2, kappa=1.0)
             largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
-            
-            #kappa = abs(largest_eigenvalue) / rho
-            kappa = kappa  # Use fixed kappa from parameters file
+            if file_kappa < 0:
+                kappa = abs(largest_eigenvalue) / rho
+            else:
+                kappa = file_kappa  # Use fixed kappa from parameters file
             print(f"      Setting kappa to {kappa:.12f} based on largest eigenvalue {largest_eigenvalue:.12f}", flush=True)
             args_list = [(L, rho, kappa, disorder, num_eigval, X, sparse, retevec, reteval, E_offset, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
