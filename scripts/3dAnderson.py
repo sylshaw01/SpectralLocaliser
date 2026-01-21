@@ -68,7 +68,7 @@ if __name__ == "__main__":
     num_disorder_realisations = int(parameters.get('num_disorder_realisations', 100))
 
     rho = float(parameters.get('rho', 30.0))
-    kappa = float(parameters.get('kappa', 0.1))
+    file_kappa = float(parameters.get('kappa', 0.1))
     disorder_start = float(parameters.get('disorder_start', 0.0))
     disorder_end = float(parameters.get('disorder_end', 5.0))
     disorder_resolution = int(parameters.get('disorder_resolution', 6))
@@ -83,7 +83,10 @@ if __name__ == "__main__":
     retevec = False
 
     current_date = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    base_name = f"../data/3dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
+    if file_kappa < 0:
+        base_name = f"../data/3dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
+    else:
+        base_name = f"../data/3dAnderson_L{L}_disorder{disorder_start}-{disorder_end}_kappa{file_kappa}_numEigs{num_eigenvalues}_realizations{num_disorder_realisations}_{current_date}"
 
     shape_4d_H = (len(disorder_values), num_disorder_realisations, L**3, L**3)
     shape_4d_SL = (len(disorder_values), num_disorder_realisations, 4*L**3, 4*L**3)
@@ -133,7 +136,11 @@ if __name__ == "__main__":
             modelforkappa = ThreeDimensionalAnderson(L,disorder,rho=L//2,kappa=1.0)
             #Find largest eigenvalue to set kappa appropriately
             largest_eigenvalue = eigsh(modelforkappa.H, k=1, which='LM', return_eigenvectors=False)[0]
-            kappa = largest_eigenvalue / rho
+            if file_kappa > 0:
+                kappa = file_kappa
+            else:
+                kappa = abs(largest_eigenvalue) / rho
+            print(f"      Setting kappa to {kappa:.12f} based on largest eigenvalue {largest_eigenvalue:.12f}", flush=True)
             args_list  = [(L, rho, kappa, disorder, num_eigval, X, sparse,retevec, reteval, i) for i in range(num_disorder_realisations)]
             results = list(pool.imap(single_iteration, args_list, chunksize=1))
             print(f"      Time for disorder {disorder}: {time.time() - disorder_time} seconds", flush=True)
